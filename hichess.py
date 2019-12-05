@@ -16,7 +16,7 @@ class _Check:
 
     def invalidSquareError(self):
         pass
-    
+
     @classmethod
     def checkSquareValidity(self, square: chess.Square, noexcept = False):
         if square not in chess.SQUARES:
@@ -136,7 +136,7 @@ class BoardWidget(QtWidgets.QLabel):
         self.setScaledContents(True)
         self._setBoardPixmap()
         self.loadPiecesFromPieceMap()
-        #self.setStyleSheet("QPushButton { background: transparent; }")
+        self.setStyleSheet("QPushButton { background: transparent; }")
 
     def loadPiecesFromPieceMap(self):
         for square, piece in self.board.piece_map().items():
