@@ -5,29 +5,21 @@ import PySide2.QtCore as QtCore
 import PySide2.QtGui as QtGui
 
 import logging
+from typing import Optional, Callable
+from itertools import zip_longest
 import sys
-from typing import Optional
 
 from . import resources
 
 
-class _Check:
-    noexcept = False
-
-    def invalidSquareError(self):
-        pass
-
-    @classmethod
-    def checkSquareValidity(self, square: chess.Square, noexcept = False):
-        if square not in chess.SQUARES:
-            self.invalidSquareError()
+def _error(msg: str):
+    print(msg, file=sys.stderr)
 
 class SquareWidget(QtWidgets.QPushButton):
     def __init__(self, square: chess.Square,
-                 parent: Optional[QtWidgets.QWidget] = None):
-        _Check.checkSquareValidity(square)
+                 parent: Optional[QtWidgets.QWidget]=None):
         if square not in chess.SQUARES:
-            raise ValueError("Square {} is not valid".format(square))
+            raise ValueError("Square {} does not exist".format(square))
 
         super().__init__(parent)
         self._square = square
@@ -38,19 +30,32 @@ class SquareWidget(QtWidgets.QPushButton):
 
     @square.setter
     def square(self, square):
-        assert square in chess.SQUARES
+        if square not in chess.SQUARES:
+            raise ValueError("Square {} does not exist".format(square))
         self._square = square
 
 class PieceWidget(SquareWidget):
     def __init__(self, piece: chess.Piece, square: chess.Square,
-                 parent: Optional[QtWidgets.QWidget] = None):
+                 parent: Optional[QtWidgets.QWidget]=None):
         super().__init__(square, parent)
+
+        self._piece = piece
+
         self.setAutoExclusive(True)
         self.setCheckable(True)
         self.transformInto(piece)
         self.setIconSize(self.size())
 
+    @property
+    def piece(self):
+        return self._piece
+
+    @piece.setter
+    def piece(self, piece: chess.Piece):
+        self.transformInto(piece)
+
     def transformInto(self, piece: chess.Piece):
+        self.piece = piece
         colorName = chess.COLOR_NAMES[piece.color]
         pieceName = chess.PIECE_NAMES[piece.piece_type]
         self.setIcon(QtGui.QIcon(":/images/{}_{}.png".format(colorName, pieceName)))
@@ -58,14 +63,15 @@ class PieceWidget(SquareWidget):
 
 class HighlightedSquareWidget(SquareWidget):
     def __init__(self, square: chess.Square, #callback,
-                 parent: Optional[QtWidgets.QWidget] = None):
+                 parent: Optional[QtWidgets.QWidget]=None):
         super().__init__(square, parent)
         #self.clicked.connect(callback)
         #self.setIcon(QtGui.QIcon(":/images/highlighted_square"))
         #self.setIconSize(self.size() / 4)
 
 class BoardLayout(QtCore.QObject):
-    def __init__(self, parent: QtWidgets.QWidget, adjustWidget=lambda w: None):
+    def __init__(self, parent: QtWidgets.QWidget,
+                 adjustWidget: Callable[[QtWidgets.QWidget], None]=lambda w: None):
         super().__init__(parent)
         self._widgets = []
         self._temporaryWidgets = []
@@ -75,49 +81,51 @@ class BoardLayout(QtCore.QObject):
     def getWidgets(self):
         return self._widgets.copy()
 
+    def addWidget(self, w: QtWidgets.QWidget):
+        if self._hasLayout(w):
+            _error("BoardLayout: Trying to add a widget, which already is in a layout")
+            return
+        w.setParent(self.parent())
+        self._widgets.append(w)
+        self.adjustWidget(w)
+
     def getTemporaryWidgets(self):
         return self._temporaryWidgets.copy()
+
+    def addTemporaryWidget(self, w: QtWidgets.QWidget):
+        if self._hasLayout(w):
+            _error("BoardLayout: Trying to add a widget, which already is in a layout")
+            return
+        w.setParent(self.parent())
+        self._temporaryWidgets.append(w)
+        self.adjustWidget(w)
 
     def clearTemporaryWidgets(self):
         for w in self._temporaryWidgets:
             w.deleteLater()
         self._temporaryWidgets.clear()
 
-    def addWidget(self, w: QtWidgets.QWidget):
-        w.setParent(self.parent())
-        self._widgets.append(w)
-        self.adjustWidget(w)
-
-    def addWidgetAt(self, pos: int, w: QtWidgets.QWidget):
-        w.setParent(self.parent())
-        self._widgets.insert(pos, w)
-        self.adjustWidget(w)
-
-    def widgetAt(self, pos: int):
-        return self._widgets[pos]
-
-    def addTemporaryWidget(self, w: QtWidgets.QWidget):
-        w.setParent(self.parent())
-        self._temporaryWidgets.append(w)
-        self.adjustWidget(w)
-
-    def temporaryWidgetAt(self, pos: int):
-        return self._temporaryWidgets[pos]
-
-    def addTemporaryWidgetAt(self, pos: int, w: QtWidgets.QWidget):
-        w.setParent(self.parent())
-        self._temporaryWidgets.insert(pos, w)
-        self.adjustWidget(w)
+    def update(self):
+        for w, tw in zip_longest(self._widgets, self._temporaryWidgets):
+            w.setParent(self.parent())
+            self.adjustWidget(w)
+            tw.setParent(self.parent())
+            self.adjustWidget(tw)
 
     def eventFilter(self, watched: QtCore.QObject, event: QtGui.QResizeEvent) -> bool:
         if watched == self.parent() and event.type() == QtCore.QEvent.Resize:
             watched.heightForWidth(max(watched.width(), watched.height()))
-            for w in self._widgets:
+            for w, tw in zip_longest(self._widgets, self._temporaryWidgets):
                 self.adjustWidget(w)
-            for tempW in self._temporaryWidgets:
-                self.adjustWidget(tempW)
+                self.adjustWidget(tw)
             return True
         return super().eventFilter(watched, event)
+
+    def _hasLayout(self, w: QtWidgets.QWidget):
+        if (w != None and w.parent() != None and
+                isinstance(w.parent().layout(), BoardLayout)):
+            return True
+        return False
 
 
 class BoardWidget(QtWidgets.QLabel):
@@ -129,7 +137,7 @@ class BoardWidget(QtWidgets.QLabel):
 
         self.board = chess.Board() if not flipped else chess.Board().mirror()
         self.flipped = flipped
-        self.boardLayout = BoardLayout(self, self._adjustWidget)
+        self._boardLayout = BoardLayout(self, self._adjustWidget)
         self.current = None
 
         self.setAutoFillBackground(True)
@@ -156,13 +164,13 @@ class BoardWidget(QtWidgets.QLabel):
 
     def pushPiece(self, toSquare: chess.Square, w: PieceWidget):
         if not self.board.is_legal(chess.Move(w.square, toSquare)):
-            print("BoardWidget: Attempting to do an illegal move: {} -> {}", file=sys.stderr)
+            _error("BoardWidget: Attempting to do an illegal move: {} -> {}")
 
         move = chess.Move(w.square, toSquare)
         if self.board.is_en_passant(move):
             self._captureEnPassant(move, w)
         elif self.board.is_capture(move):
-            for _w in self.boardLayout.getWidgets():
+            for _w in self._boardLayout.getWidgets():
                 if _w.square == toSquare:
                     _w.deleteLater()
 
@@ -170,7 +178,7 @@ class BoardWidget(QtWidgets.QLabel):
         self.board.push(chess.Move(w.square, toSquare))
         logging.info(self.board)
         self.moveWidget(toSquare, w)
-        self.boardLayout.clearTemporaryWidgets()
+        self._boardLayout.clearTemporaryWidgets()
         w.square = toSquare
 
     def highlightLegalMoves(self, w: PieceWidget):
@@ -180,7 +188,7 @@ class BoardWidget(QtWidgets.QLabel):
         for move in self.board.legal_moves:
             if w.square == move.from_square:
                 highlightedSquare = HighlightedSquareWidget(move.to_square, self)
-                self.boardLayout.addTemporaryWidget(highlightedSquare)
+                self._boardLayout.addTemporaryWidget(highlightedSquare)
                 highlightedSquare.setText("O")
                 connectWidget(move.to_square, highlightedSquare)
                 highlightedSquare.show()
@@ -190,8 +198,15 @@ class BoardWidget(QtWidgets.QLabel):
         self._setBoardPixmap()
         self.board = self.board.mirror()
 
-        for piece in self.boardLayout.getWidgets():
+        for piece in self._boardLayout.getWidgets():
             self.moveWidget(chess.square_mirror(piece.square), piece)
+
+    def layout(self) -> BoardLayout:
+        return self._boardLayout
+
+    def setLayout(self, layout: BoardLayout):
+        self._boardLayout = layout
+        self._boardLayout.update()
 
     def _setBoardPixmap(self):
         if self.flipped:
@@ -209,9 +224,9 @@ class BoardWidget(QtWidgets.QLabel):
         self.moveWidget(w.square, w)
 
     @QtCore.Slot()
-    def onPieceWidgetToggled(self, toggled: bool, w):
+    def onPieceWidgetToggled(self, toggled: bool, w: PieceWidget):
         if toggled:
-            self.boardLayout.clearTemporaryWidgets()
+            self._boardLayout.clearTemporaryWidgets()
             self.current = w
             self.highlightLegalMoves(w)
         else:
@@ -219,13 +234,13 @@ class BoardWidget(QtWidgets.QLabel):
 
     def _loadPiece(self, square: chess.Square, piece: chess.Piece):
         w = PieceWidget(piece, square)
-        self.boardLayout.addWidget(w)
+        self._boardLayout.addWidget(w)
         w.toggled.connect(lambda toggled: self.onPieceWidgetToggled(toggled, w))
 
     def _captureEnPassant(self, move: chess.Move, w: PieceWidget):
         color = self.board.color_at(w.square)
         self.moveWidget(move.to_square, w)
-        for _w in self.boardLayout.getWidgets():
+        for _w in self._boardLayout.getWidgets():
             if color:
                 sq = move.to_square - 8
             else:
