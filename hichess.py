@@ -18,7 +18,7 @@ def _error(msg: str):
 
 class SquareWidget(QtWidgets.QPushButton):
     def __init__(self, square: chess.Square,
-                 parent: Optional[QtWidgets.QWidget]=None):
+                 parent: Optional[QtWidgets.QWidget] = None):
         if square not in chess.SQUARES:
             raise ValueError("Square {} does not exist".format(square))
 
@@ -38,14 +38,14 @@ class SquareWidget(QtWidgets.QPushButton):
 
 class PieceWidget(SquareWidget):
     def __init__(self, square: chess.Square, piece: chess.Piece,
-                 parent: Optional[QtWidgets.QWidget]=None):
+                 parent: Optional[QtWidgets.QWidget] = None):
         super().__init__(square, parent)
 
         self._piece = piece
 
         self.setAutoExclusive(True)
         self.setCheckable(True)
-        self.transformInto(piece)
+        self.transformInto(piece.piece_type)
         self.setIconSize(self.size())
 
     def __eq__(self, w: "PieceWidget"):
@@ -58,28 +58,28 @@ class PieceWidget(SquareWidget):
         return self._piece
 
     @piece.setter
-    def piece(self, piece: chess.Piece):
-        self.transformInto(piece)
+    def piece(self, pieceType: chess.PieceType):
+        self.transformInto(pieceType)
 
-    def transformInto(self, piece: chess.Piece):
-        self._piece = piece
-        colorName = chess.COLOR_NAMES[piece.color]
-        pieceName = chess.PIECE_NAMES[piece.piece_type]
+    def transformInto(self, pieceType: chess.PieceType):
+        self._piece.piece_type = pieceType
+        colorName = chess.COLOR_NAMES[self._piece.color]
+        pieceName = chess.PIECE_NAMES[pieceType]
         self.setIcon(QtGui.QIcon(":/images/{}_{}.png".format(colorName, pieceName)))
 
 
 class HighlightedSquareWidget(SquareWidget):
-    def __init__(self, square: chess.Square, #callback,
-                 parent: Optional[QtWidgets.QWidget]=None):
+    def __init__(self, square: chess.Square,  # callback,
+                 parent: Optional[QtWidgets.QWidget] = None):
         super().__init__(square, parent)
-        #self.clicked.connect(callback)
-        #self.setIcon(QtGui.QIcon(":/images/highlighted_square"))
-        #self.setIconSize(self.size() / 4)
+        # self.clicked.connect(callback)
+        # self.setIcon(QtGui.QIcon(":/images/highlighted_square"))
+        # self.setIconSize(self.size() / 4)
 
 
 class BoardLayout(QtCore.QObject):
     def __init__(self, parent: QtWidgets.QWidget,
-                 adjustWidget: Callable[[QtWidgets.QWidget], None]=lambda w: None):
+                 adjustWidget: Callable[[QtWidgets.QWidget], None] = lambda w: None):
         super().__init__(parent)
 
         if parent.layout() is not None:
@@ -137,44 +137,86 @@ class BoardWidget(QtWidgets.QLabel):
         self.loadPiecesFromPieceMap()
         self.setStyleSheet("QPushButton { background: transparent; }")
 
-    def loadPiecesFromPieceMap(self):
-        for square, piece in self.board.piece_map().items():
-            self._loadPiece(square, piece)
+    def previousFileSquare(self, square: chess.Square) -> chess.Square:
+        return chess.SQUARES[square - 1]
 
-    def pieceWidgetAt(self, square: chess.Square):
+    def nextFileSquare(self, square: chess.Square) -> chess.Square:
+        return chess.SQUARES[square + 1]
+
+    def previousRankSquare(self, square: chess.Square) -> chess.Square:
+        return chess.SQUARES[square - 8]
+
+    def nextRankSquare(self, square: chess.Square) -> chess.Square:
+        return chess.SQUARES[square + 8]
+
+    def pieceWidgetAt(self, square: chess.Square) -> Optional[PieceWidget]:
         piece = self.board.piece_at(square)
         if piece is not None:
             return PieceWidget(square, piece)
         return None
 
+    def loadPiece(self, square: chess.Square, piece: chess.Piece):
+        w = PieceWidget(square, piece)
+        self._boardLayout.addWidget(w)
+        w.toggled.connect(partial(self.onPieceWidgetToggled, w))
+
+    def loadPieceWidget(self, w: PieceWidget):
+        self._boardLayout.addWidget(w)
+        w.toggled.connect(partial(self.onPieceWidgetToggled, w))
+
+    def loadPiecesFromPieceMap(self, map=chess.Board().piece_map()):
+        for square, piece in self.board.piece_map().items():
+            self.loadPiece(square, piece)
+
     def moveWidget(self, toSquare: chess.Square, w: QtWidgets.QWidget):
+        w.square = toSquare
         if not self.flipped:
             toSquare = chess.square_mirror(toSquare)
         x = chess.square_file(toSquare)
         y = chess.square_rank(toSquare)
         w.move(x * w.width(), y * w.height())
 
-    def pushPiece(self, toSquare: chess.Square, w: PieceWidget):
-        if not self.board.is_legal(chess.Move(w.square, toSquare)):
-            _error("BoardWidget: Attempting to do an illegal move: {} -> {}")
+    def isLegalPromotion(self, move: chess.Move):
+        w = self.pieceWidgetAt(move.from_square)
+        if w.piece.piece_type == chess.PAWN:
+            rank = chess.square_rank(move.to_square)
+            if rank == 0 or rank == 7:
+                return True
+        return False
+
+    def pushPieceWidget(self, toSquare: chess.Square, w: PieceWidget):
+        move = chess.Move(w.square, toSquare)
+
+        if self.isLegalPromotion(move):
+            # TODO Create a promotion dialogue
+            move.promotion = chess.QUEEN
+            w.transformInto(move.promotion)
+
+        if not self.board.is_legal(move):
+            _error("BoardWidget: Attempting to do an illegal move: {} -> {}".format(w.square, toSquare))
             return
 
-        move = chess.Move(w.square, toSquare)
-        if self.board.is_en_passant(move):
+        print("{} ({} -> {})".format(self.board.lan(move), w.square, toSquare))
+
+        if self.board.is_kingside_castling(move):
+            self._kingsideCastle(w.piece.color)
+        elif self.board.is_queenside_castling(move):
+            self._queensideCastle(w.piece.color)
+        elif self.board.is_en_passant(move):
             self._captureEnPassant(move, w)
         elif self.board.is_capture(move):
-            self._boardLayout.deleteWidgets(lambda _w: toSquare == _w.square)
-
-        self.board.push(chess.Move(w.square, toSquare))
+            self._boardLayout.deleteWidgets(
+                lambda _w: self.pieceWidgetAt(toSquare) == _w
+            )
+        self.board.push(move)
         logging.info(self.board)
 
         self.moveWidget(toSquare, w)
-        w.square = toSquare
         self.deleteHighlightedSquares()
 
     def highlightLegalMoves(self, w: PieceWidget):
         def connectWidget(square, w):
-            w.clicked.connect(partial(self.pushPiece, square, self.currentWidget))
+            w.clicked.connect(partial(self.pushPieceWidget, square, self.currentWidget))
 
         for move in self.board.legal_moves:
             if w.square == move.from_square:
@@ -221,25 +263,44 @@ class BoardWidget(QtWidgets.QLabel):
 
     @QtCore.Slot()
     def onPieceWidgetToggled(self, w: PieceWidget, toggled: bool):
+        self.deleteHighlightedSquares()
         if toggled:
-            self.deleteHighlightedSquares()
             self.currentWidget = w
             self.highlightLegalMoves(w)
         else:
             self.currentWidget = None
 
-    def _loadPiece(self, square: chess.Square, piece: chess.Piece):
-        w = PieceWidget(square, piece)
-        self._boardLayout.addWidget(w)
-        w.toggled.connect(partial(self.onPieceWidgetToggled, w))
+    def _kingsideCastle(self, color: chess.Color):
+        if not self.board.has_kingside_castling_rights(color):
+            _error("{} does not have kingside castling rights".format(chess.COLOR_NAMES[color]))
+            return
+
+        king = self.pieceWidgetAt(self.board.king(color))
+        rook = self.pieceWidgetAt(king.square + 3)
+        for w in filter(lambda _w: _w == king or _w == rook, self._boardLayout.widgets):
+            if w == king:
+                self.moveWidget(king.square + 2, w)
+            elif w == rook:
+                self.moveWidget(rook.square - 2, w)
+
+    def _queensideCastle(self, color: chess.Color):
+        if not self.board.has_queenside_castling_rights(color):
+            _error("{} does not have queenside castling rights".format(chess.COLOR_NAMES[color]))
+            return
+
+        king = self.pieceWidgetAt(self.board.king(color))
+        rook = self.pieceWidgetAt(king.square - 4)
+        for w in filter(lambda _w: _w == king or _w == rook, self._boardLayout.widgets):
+            if w == king:
+                self.moveWidget(king.square - 2, w)
+            elif w == rook:
+                self.moveWidget(rook.square + 3, w)
 
     def _captureEnPassant(self, move: chess.Move, w: PieceWidget):
-        color = self.board.color_at(w.square)
+        if self.board.color_at(w.square) == chess.WHITE:
+            toCapture = self.pieceWidgetAt(self.previousRankSquare(move.to_square))
+        else:
+            toCapture = self.pieceWidgetAt(self.nextRankSquare(move.to_square))
+
         self.moveWidget(move.to_square, w)
-        for _w in self._boardLayout.widgets:
-            if color:
-                sq = move.to_square - 8
-            else:
-                sq = move.to_square + 8
-            if _w.square == sq:
-                _w.deleteLater()
+        self._boardLayout.deleteWidgets(lambda _w: _w == toCapture)
