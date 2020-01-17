@@ -15,12 +15,21 @@ from . import resources
 class IllegalMoveError(Exception):
     pass
 
+class SquareInaccessibleError(Exception):
+    pass
+
+
 class SquareWidget(QtWidgets.QPushButton):
     def __init__(self, square: chess.Square,
                  parent: Optional[QtWidgets.QWidget]=None):
         self._square = None
         self.square = square
         super().__init__(parent)
+
+    def __eq__(self, other: "SquareWidget"):
+        if isinstance(other, SquareWidget):
+            return self._square == other.square
+        return False
 
     @property
     def square(self):
@@ -95,7 +104,7 @@ class BoardLayout(QtCore.QObject):
         else:
             print("BoardLayout: Attempting to add a widget, which already is in a layout", sys.stderr)
 
-    def deleteWidgets(self, function: Callable[[QtWidgets.QWidget], bool]=lambda w: None):
+    def deleteWidgets(self, function: Callable[[QtWidgets.QWidget], bool]=lambda w: True):
         list(map(QtWidgets.QWidget.deleteLater, filter(function, self.widgets)))
         self.widgets = list(filter(lambda w: not function(w), self.widgets))
 
@@ -126,7 +135,7 @@ class BoardWidget(QtWidgets.QLabel):
             self.board = chess.Board(fen).mirror()
         self.flipped = flipped
         self._boardLayout = None
-        self.currentWidget = None
+        self.toggledWidget = None
 
         self.setLayout(BoardLayout(self, self._adjustWidget))
         self.loadPiecesFromPieceMap()
@@ -150,7 +159,22 @@ class BoardWidget(QtWidgets.QLabel):
         y = chess.square_rank(toSquare)
         w.move(x * w.width(), y * w.height())
 
+    def movePieceWidget(self, toSquare: chess.Square, w: PieceWidget):
+        piece = w.piece
+        self.board.remove_piece_at(w.square)
+        self.board.set_piece_at(toSquare, piece)
+
+        w.square = toSquare
+        if not self.flipped:
+            toSquare = chess.square_mirror(toSquare)
+        x = chess.square_file(toSquare) * w.width()
+        y = chess.square_rank(toSquare) * w.height()
+        w.move(x, y)
+
     def addPiece(self, square: chess.Square, piece: chess.Piece):
+        if self.board.piece_at(square) is not None:
+            raise ValueError("Square {} is already occupied")
+
         self.board.set_piece_at(square, piece)
         w = PieceWidget(square, piece)
         self._boardLayout.addWidget(w)
@@ -162,22 +186,30 @@ class BoardWidget(QtWidgets.QLabel):
             self._boardLayout.addWidget(w)
             w.toggled.connect(partial(self.onPieceWidgetToggled, w))
 
-    def isLegalPromotion(self, move: chess.Move):
-        if (move in self.board.legal_moves and
-                self.board.piece_at(move.from_square).piece_type == chess.PAWN):
-            return move in chess.SQUARES[0:8] or move in chess.SQUARES[-7:0]
+    def setFen(self, fen: str):
+        self.board.set_fen(fen)
+        self._boardLayout.deleteWidgets()
+        self.loadPiecesFromPieceMap(self.board.piece_map())
+
+    def isPseudoLegalPromotion(self, move: chess.Move):
+        piece = self.board.piece_at(move.from_square)
+        if piece is not None and piece.piece_type == chess.PAWN:
+            if piece.color == chess.WHITE:
+                return chess.A7 <= move.from_square <= chess.H7 and chess.A8 <= move.to_square <= chess.H8
+            elif piece.color == chess.BLACK:
+                return chess.A2 <= move.from_square <= chess.H2 and chess.A1 <= move.to_square <= chess.H1
         return False
 
     def pushPieceWidget(self, toSquare: chess.Square, w: PieceWidget):
         move = chess.Move(w.square, toSquare)
 
-        if self.isLegalPromotion(move):
+        if self.isPseudoLegalPromotion(move):
             # TODO Create a promotion dialogue
             move.promotion = chess.QUEEN
             w.transformInto(move.promotion)
 
         if not self.board.is_legal(move):
-            raise IllegalMoveError("illegal move {}".format(move))
+            raise IllegalMoveError("illegal move {} with {}".format(move, chess.PIECE_NAMES[w.piece.piece_type]))
 
         logging.debug("\n{} ({} -> {})".format(self.board.lan(move), w.square, toSquare))
 
@@ -198,9 +230,21 @@ class BoardWidget(QtWidgets.QLabel):
         self.moveWidget(toSquare, w)
         self.deleteHighlightedSquares()
 
+    def push(self, move: chess.Move):
+        for w in self._boardLayout.widgets:
+            if w.square == move.from_square:
+                self.pushPieceWidget(move.to_square, w)
+
+    def pop(self):
+        move = self.board.pop()
+
+        for w in self._boardLayout.widgets:
+            if w.square == move.to_square:
+                self.movePieceWidget(move.from_square, w)
+
     def highlightLegalMoves(self, w: PieceWidget):
         def connectWidget(square, w):
-            w.clicked.connect(partial(self.pushPieceWidget, square, self.currentWidget))
+            w.clicked.connect(partial(self.pushPieceWidget, square, self.toggledWidget))
 
         for move in self.board.legal_moves:
             if w.square == move.from_square:
@@ -255,10 +299,10 @@ class BoardWidget(QtWidgets.QLabel):
     def onPieceWidgetToggled(self, w: PieceWidget, toggled: bool):
         self.deleteHighlightedSquares()
         if toggled:
-            self.currentWidget = w
+            self.toggledWidget = w
             self.highlightLegalMoves(w)
         else:
-            self.currentWidget = None
+            self.toggledWidget = None
 
     def _kingsideCastle(self, color: chess.Color):
         king = self.pieceWidgetAt(self.board.king(color))
