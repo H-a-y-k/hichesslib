@@ -6,7 +6,7 @@ import PySide2.QtGui as QtGui
 
 import logging
 from functools import partial
-from typing import Optional, Callable
+from typing import Optional, Callable, Mapping
 import sys
 
 from . import resources
@@ -87,10 +87,10 @@ class BoardLayout(QtCore.QObject):
                  adjustWidget: Callable[[QtWidgets.QWidget], None]=lambda w: None):
         super().__init__(parent)
 
-        if parent.layout() is not None:
-            print("BoardLayout: parent already has a layout", sys.stderr)
-        else:
+        if parent.layout() is None:
             parent.installEventFilter(self)
+        else:
+            print("BoardLayout: parent already has a layout", sys.stderr)
 
         self.widgets = []
         self.adjustWidget = adjustWidget
@@ -117,28 +117,22 @@ class BoardLayout(QtCore.QObject):
         return super().eventFilter(watched, event)
 
     def _insideLayout(self, w: QtWidgets.QWidget):
-        if (w != None and w.parent() != None and
-                w.parent().layout() != self):
-            return True
-        return False
+        return w is not None and w.parent() is not None and w.parent().layout() is not self
 
 
 class BoardWidget(QtWidgets.QLabel):
     def __init__(self, parent: Optional[QtWidgets.QWidget]=None,
-                 fen=chess.Board.starting_fen,
+                 fen: Optional[str]=chess.STARTING_FEN,
                  flipped: bool = False):
         super().__init__(parent)
 
-        if not flipped:
-            self.board = chess.Board(fen)
-        else:
-            self.board = chess.Board(fen).mirror()
+        self.board = chess.Board(fen)
         self.flipped = flipped
         self._boardLayout = None
         self.toggledWidget = None
 
         self.setLayout(BoardLayout(self, self._adjustWidget))
-        self.loadPiecesFromPieceMap()
+        self.setPieceMap(self.board.piece_map())
 
         self.setAutoFillBackground(True)
         self.setScaledContents(True)
@@ -165,8 +159,7 @@ class BoardWidget(QtWidgets.QLabel):
         self.board.set_piece_at(toSquare, piece)
 
         w.square = toSquare
-        if not self.flipped:
-            toSquare = chess.square_mirror(toSquare)
+        toSquare = chess.square_mirror(toSquare)
         x = chess.square_file(toSquare) * w.width()
         y = chess.square_rank(toSquare) * w.height()
         w.move(x, y)
@@ -180,8 +173,9 @@ class BoardWidget(QtWidgets.QLabel):
         self._boardLayout.addWidget(w)
         w.toggled.connect(partial(self.onPieceWidgetToggled, w))
 
-    def loadPiecesFromPieceMap(self, map: dict=chess.Board().piece_map()):
-        for square, piece in self.board.piece_map().items():
+    def setPieceMap(self, pieces: Mapping[int, chess.Piece]):
+        self.board.set_piece_map(pieces)
+        for square, piece in pieces.items():
             w = PieceWidget(square, piece)
             self._boardLayout.addWidget(w)
             w.toggled.connect(partial(self.onPieceWidgetToggled, w))
@@ -189,7 +183,11 @@ class BoardWidget(QtWidgets.QLabel):
     def setFen(self, fen: str):
         self.board.set_fen(fen)
         self._boardLayout.deleteWidgets()
-        self.loadPiecesFromPieceMap(self.board.piece_map())
+
+        for square, piece in self.board.piece_map().items():
+            w = PieceWidget(square, piece)
+            self._boardLayout.addWidget(w)
+            w.toggled.connect(partial(self.onPieceWidgetToggled, w))
 
     def isPseudoLegalPromotion(self, move: chess.Move):
         piece = self.board.piece_at(move.from_square)
@@ -261,7 +259,6 @@ class BoardWidget(QtWidgets.QLabel):
     def flip(self) -> "BoardWidget":
         self.flipped = not self.flipped
         self._setBoardPixmap()
-        self.board = self.board.mirror()
 
         for piece in self._boardLayout.widgets:
             self.moveWidget(chess.square_mirror(piece.square), piece)
@@ -324,9 +321,9 @@ class BoardWidget(QtWidgets.QLabel):
 
     def _captureEnPassant(self, move: chess.Move, w: PieceWidget):
         if self.board.color_at(w.square) == chess.WHITE:
-            toCapture = self.pieceWidgetAt(move.to_square - 8)
+            captureSquare = move.to_square - 8
         else:
-            toCapture = self.pieceWidgetAt(move.to_square + 8)
+            captureSquare = move.to_square + 8
 
         self.moveWidget(move.to_square, w)
-        self._boardLayout.deleteWidgets(lambda _w: _w == toCapture)
+        self._boardLayout.deleteWidgets(lambda _w: _w.square == captureSquare)
