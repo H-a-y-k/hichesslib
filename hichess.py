@@ -59,6 +59,7 @@ class SquareWidget(QtWidgets.QPushButton):
     def __ne__(self, other):
         return not self == other
 
+
 class PieceWidget(SquareWidget):
     def __init__(self, square: chess.Square, piece: chess.Piece,
                  parent: Optional[QtWidgets.QWidget] = None):
@@ -158,17 +159,15 @@ class BoardWidget(QtWidgets.QLabel):
         return dict[square]
 
     def pieceWidgetAt(self, square: chess.Square) -> Optional[PieceWidget]:
-        piece = self.board.piece_at(square)
-        if piece is not None:
-            dict = {w.square: w for w in self._boardLayout.widgets}
-            return dict[square]
+        if self.board.piece_at(square) is not None:
+            return self.widgetAt(square)
         return None
 
     def moveWidget(self, toSquare: chess.Square, w: SquareWidget) -> None:
         w.square = toSquare
 
-        # Window coordinates start at top left while board coordinates start at bottom left.
-        # In order to move the piece to the right coodi
+        # In order to find a square's coordinates, its distance from the
+        # top and left sides of the board must be multiplied with the board's size
         if not self.flipped:
             toSquare = chess.square_mirror(toSquare)
         x = chess.square_file(toSquare) * w.width()
@@ -178,6 +177,7 @@ class BoardWidget(QtWidgets.QLabel):
     @QtCore.Slot()
     def onPieceWidgetToggled(self, w: PieceWidget, toggled: bool):
         self.deleteHighlightedSquares()
+
         if toggled:
             self.toggledWidget = w
             self.highlightLegalMovesFor(w)
@@ -195,7 +195,7 @@ class BoardWidget(QtWidgets.QLabel):
 
         return w
 
-    def synchronizeBoard(self):
+    def synchronizeBoard(self) -> None:
         self._boardLayout.deleteWidgets()
         for square, piece in self.board.piece_map().items():
             w = PieceWidget(square, piece)
@@ -215,11 +215,13 @@ class BoardWidget(QtWidgets.QLabel):
 
     def isPseudoLegalPromotion(self, move: chess.Move) -> bool:
         piece = self.board.piece_at(move.from_square)
+
         if piece is not None and piece.piece_type == chess.PAWN:
             if piece.color == chess.WHITE:
                 return chess.A8 <= move.to_square <= chess.H8
             elif piece.color == chess.BLACK:
                 return chess.A1 <= move.to_square <= chess.H1
+
         return False
 
     def pushPieceWidget(self, toSquare: chess.Square, w: PieceWidget) -> None:
@@ -252,14 +254,12 @@ class BoardWidget(QtWidgets.QLabel):
         return self
 
     def highlightLegalMovesFor(self, w: PieceWidget) -> None:
-        def connectWidget(square, w):
-            w.clicked.connect(partial(self.pushPieceWidget, square, self.toggledWidget))
-
         for move in self.board.legal_moves:
             if w == self.pieceWidgetAt(move.from_square):
                 highlightedSquare = HighlightedSquareWidget(move.to_square)
                 self._boardLayout.addWidget(highlightedSquare)
-                connectWidget(move.to_square, highlightedSquare)
+                highlightedSquare.clicked.connect(partial(self.pushPieceWidget,
+                                                          move.to_square, self.toggledWidget))
 
     def deleteHighlightedSquares(self) -> None:
         self._boardLayout.deleteWidgets(
@@ -280,24 +280,25 @@ class BoardWidget(QtWidgets.QLabel):
 
     def setLayout(self, layout: BoardLayout) -> None:
         self.removeEventFilter(self._boardLayout)
+
+        # Remove all the children that are inside board layout
         if self._boardLayout is not None:
             for w in self._boardLayout.widgets:
                 w.setParent(None)
         layout.setParent(self)
+
+        # Pass the ownership of the widgets inside layout to this widget
         for w in layout.widgets:
             w.setParent(self)
         self._boardLayout = layout
+
         self.installEventFilter(self._boardLayout)
 
     def _setBoardPixmap(self):
         if self.flipped:
-            boardPix = QtGui.QPixmap(":/images/flipped_chessboard.png")
+            self.setPixmap(QtGui.QPixmap(":/images/flipped_chessboard.png"))
         else:
-            boardPix = QtGui.QPixmap(":/images/chessboard.png")
-
-        self.setPixmap(boardPix.scaled(self.width(), self.height(),
-                                       QtCore.Qt.KeepAspectRatioByExpanding,
-                                       QtCore.Qt.SmoothTransformation))
+            self.setPixmap(QtGui.QPixmap(":/images/chessboard.png"))
 
     def _adjustWidget(self, w: SquareWidget):
         w.resize(self.size() / 8)
