@@ -1,3 +1,21 @@
+# -*- coding: utf-8 -*-
+#
+# This file is part of the HiChess project.
+# Copyright (C) 2019-2020 Haik Sargsian <haiksargsian6@gmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+
 import chess
 
 import PySide2.QtWidgets as QtWidgets
@@ -91,7 +109,7 @@ class BoardLayout(QtCore.QObject):
         self.adjustWidget = adjustWidget
 
     def addWidget(self, w: QtWidgets.QWidget) -> None:
-        if not self._insideLayout(w):
+        if not (w is not None and w.parent() is not None and w.parent().layout() is not self):
             w.setParent(self.parent())
             self.widgets.append(w)
             self.adjustWidget(w)
@@ -114,9 +132,6 @@ class BoardLayout(QtCore.QObject):
                 self.adjustWidget(w)
             return True
         return super().eventFilter(watched, event)
-
-    def _insideLayout(self, w: QtWidgets.QWidget):
-        return w is not None and w.parent() is not None and w.parent().layout() is not self
 
 
 class BoardWidget(QtWidgets.QLabel):
@@ -146,31 +161,28 @@ class BoardWidget(QtWidgets.QLabel):
         piece = self.board.piece_at(square)
         if piece is not None:
             dict = {w.square: w for w in self._boardLayout.widgets}
-            if isinstance(dict[square], PieceWidget):
-                return dict[square]
+            return dict[square]
         return None
 
-    def moveWidget(self, toSquare: chess.Square, w: QtWidgets.QWidget) -> None:
+    def moveWidget(self, toSquare: chess.Square, w: SquareWidget) -> None:
         w.square = toSquare
 
-        # Window coordinates start at top left while board coordinates start at
+        # Window coordinates start at top left while board coordinates start at bottom left.
+        # In order to move the piece to the right coodi
         if not self.flipped:
             toSquare = chess.square_mirror(toSquare)
         x = chess.square_file(toSquare) * w.width()
         y = chess.square_rank(toSquare) * w.height()
         w.move(x, y)
 
-    def movePieceWidget(self, toSquare: chess.Square, w: PieceWidget) -> None:
-        piece = w.piece
-        self.board.remove_piece_at(w.square)
-        self.board.set_piece_at(toSquare, piece)
-
-        w.square = toSquare
-        if not self.flipped:
-            toSquare = chess.square_mirror(toSquare)
-        x = chess.square_file(toSquare) * w.width()
-        y = chess.square_rank(toSquare) * w.height()
-        w.move(x, y)
+    @QtCore.Slot()
+    def onPieceWidgetToggled(self, w: PieceWidget, toggled: bool):
+        self.deleteHighlightedSquares()
+        if toggled:
+            self.toggledWidget = w
+            self.highlightLegalMovesFor(w)
+        else:
+            self.toggledWidget = None
 
     def addPiece(self, square: chess.Square, piece: chess.Piece) -> PieceWidget:
         if self.board.piece_at(square) is not None:
@@ -183,6 +195,13 @@ class BoardWidget(QtWidgets.QLabel):
 
         return w
 
+    def synchronizeBoard(self):
+        self._boardLayout.deleteWidgets()
+        for square, piece in self.board.piece_map().items():
+            w = PieceWidget(square, piece)
+            self._boardLayout.addWidget(w)
+            w.toggled.connect(partial(self.onPieceWidgetToggled, w))
+
     def setPieceMap(self, pieces: Mapping[int, chess.Piece]) -> None:
         self.board.set_piece_map(pieces)
         for square, piece in pieces.items():
@@ -192,20 +211,15 @@ class BoardWidget(QtWidgets.QLabel):
 
     def setFen(self, fen: str) -> None:
         self.board.set_fen(fen)
-        self._boardLayout.deleteWidgets()
-
-        for square, piece in self.board.piece_map().items():
-            w = PieceWidget(square, piece)
-            self._boardLayout.addWidget(w)
-            w.toggled.connect(partial(self.onPieceWidgetToggled, w))
+        self.synchronizeBoard()
 
     def isPseudoLegalPromotion(self, move: chess.Move) -> bool:
         piece = self.board.piece_at(move.from_square)
         if piece is not None and piece.piece_type == chess.PAWN:
             if piece.color == chess.WHITE:
-                return chess.A7 <= move.from_square <= chess.H7 and chess.A8 <= move.to_square <= chess.H8
+                return chess.A8 <= move.to_square <= chess.H8
             elif piece.color == chess.BLACK:
-                return chess.A2 <= move.from_square <= chess.H2 and chess.A1 <= move.to_square <= chess.H1
+                return chess.A1 <= move.to_square <= chess.H1
         return False
 
     def pushPieceWidget(self, toSquare: chess.Square, w: PieceWidget) -> None:
@@ -214,34 +228,27 @@ class BoardWidget(QtWidgets.QLabel):
         if self.isPseudoLegalPromotion(move):
             # TODO Create a promotion dialogue
             move.promotion = chess.QUEEN
-
-            if not self.board.is_legal(move):
-                raise IllegalMoveError("illegal move {} with {}".format(move, chess.PIECE_NAMES[w.piece.piece_type]))
-
             w.transformInto(move.promotion)
+
+        if not self.board.is_legal(move):
+            raise IllegalMoveError("illegal move {} with {}".format(move, chess.PIECE_NAMES[w.piece.piece_type]))
 
         logging.debug("\n{} ({} -> {})".format(self.board.lan(move), w.square, toSquare))
 
         self.board.push(move)
-        self.setFen(self.board.fen())
+        self.synchronizeBoard()
 
         logging.debug("\n{}\n".format(self.board))
 
         self.deleteHighlightedSquares()
 
     def push(self, move: chess.Move) -> "BoardWidget":
-        for w in self._boardLayout.widgets:
-            if w.square == move.from_square:
-                self.pushPieceWidget(move.to_square, w)
+        self.pushPieceWidget(move.to_square, self.pieceWidgetAt(move.from_square))
         return self
 
     def pop(self) -> "BoardWidget":
-        move = self.board.pop()
-
-        for w in self._boardLayout.widgets:
-            if w.square == move.to_square:
-                self.movePieceWidget(move.from_square, w)
-
+        self.board.pop()
+        self.synchronizeBoard()
         return self
 
     def highlightLegalMovesFor(self, w: PieceWidget) -> None:
@@ -283,7 +290,6 @@ class BoardWidget(QtWidgets.QLabel):
         self.installEventFilter(self._boardLayout)
 
     def _setBoardPixmap(self):
-        print(QtCore.QFile.exists(":images/chessboard.png"))
         if self.flipped:
             boardPix = QtGui.QPixmap(":/images/flipped_chessboard.png")
         else:
@@ -297,12 +303,3 @@ class BoardWidget(QtWidgets.QLabel):
         w.resize(self.size() / 8)
         w.setIconSize(w.size())
         self.moveWidget(w.square, w)
-
-    @QtCore.Slot()
-    def onPieceWidgetToggled(self, w: PieceWidget, toggled: bool):
-        self.deleteHighlightedSquares()
-        if toggled:
-            self.toggledWidget = w
-            self.highlightLegalMovesFor(w)
-        else:
-            self.toggledWidget = None
