@@ -34,6 +34,17 @@ class IllegalMoveError(Exception):
 
 
 class SquareWidget(QtWidgets.QPushButton):
+    """
+    A `QPushButton` with a square as chess position.
+    `SquareWidget` objects are equal if they are located on the same
+    square of the board.
+
+    Parameters
+    ----------
+    square
+        The widget's chess position.
+    """
+
     def __init__(self, square: chess.Square,
                  parent: Optional[QtWidgets.QWidget] = None):
         super().__init__(parent=parent)
@@ -42,7 +53,13 @@ class SquareWidget(QtWidgets.QPushButton):
         self.square = square
 
     @property
-    def square(self) -> Optional[chess.Square]:
+    def square(self) -> chess.Square:
+        """
+        Raises
+        ------
+        ValueError
+            If the coordinate passed to the setter is invalid.
+        """
         return self._square
 
     @square.setter
@@ -61,15 +78,27 @@ class SquareWidget(QtWidgets.QPushButton):
 
 
 class PieceWidget(SquareWidget):
+    """
+    A checkable `SquareWidget` with an icon of a chess piece.
+    The feature of checkability allows to highlight legal moves on the
+    board when the widget is toggled.
+
+    Parameters
+    ----------
+    piece
+        The icon is loaded from resource system based on the value of
+        this parameter
+    """
+
     def __init__(self, square: chess.Square, piece: chess.Piece,
                  parent: Optional[QtWidgets.QWidget] = None):
         super().__init__(square, parent)
 
-        self._piece = piece
+        self._piece = None
+        self.piece = piece
 
         self.setAutoExclusive(True)
         self.setCheckable(True)
-        self.transformInto(piece.piece_type)
         self.setIconSize(self.size())
 
     @property
@@ -77,10 +106,16 @@ class PieceWidget(SquareWidget):
         return self._piece
 
     @piece.setter
-    def piece(self, pieceType: chess.PieceType) -> None:
-        self.transformInto(pieceType)
+    def piece(self, piece: chess.Piece) -> None:
+        self.transformInto(piece.piece_type)
 
     def transformInto(self, pieceType: chess.PieceType) -> None:
+        """
+        Changes icon, based on the value of piece type.
+        This function allows to change widget's piece type and icon
+        without reassigning it to a new object or doing it manually.
+        Icons are loaded from resource system.
+        """
         self._piece.piece_type = pieceType
         colorName = chess.COLOR_NAMES[self._piece.color]
         pieceName = chess.PIECE_NAMES[pieceType]
@@ -102,18 +137,42 @@ class HighlightedSquareWidget(SquareWidget):
 
 
 class BoardLayout(QtCore.QObject):
+    """
+    This class stores a list of widgets and calls a callback each time
+    parent's resize event is triggered.
+
+    Parameters
+    ----------
+    adjustWidgetFunction
+        Callback which is called for each widget, after resize event
+        is triggered.
+
+    Attributes
+    ----------
+        widgets : list[SquareWidget]
+            Stores the widgets inside the layout.
+            You should never explicitly append a widget to the layout.
+            Instead the method `addWidget(w)` should be used.
+
+        adjustWidgetFunction
+            Here the callback is stored. Remember to call the function
+            for all the widgets inside the layout, after modifying
+            this attribute, because the class doesn't track changes to
+            this attribute.
+    """
+
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None,
-                 adjustWidget: Callable[[QtWidgets.QWidget], None] = lambda w: None):
+                 adjustWidgetFunction: Callable[[QtWidgets.QWidget], None] = lambda w: None):
         super().__init__(parent=parent)
 
         self.widgets = []
-        self.adjustWidget = adjustWidget
+        self.adjustWidgetFunction = adjustWidgetFunction
 
     def addWidget(self, w: QtWidgets.QWidget) -> None:
         if not (w is not None and w.parent() is not None and w.parent().layout() is not self):
             w.setParent(self.parent())
             self.widgets.append(w)
-            self.adjustWidget(w)
+            self.adjustWidgetFunction(w)
             w.show()
         else:
             logging.warning("BoardLayout: Attempting to add a widget, which already is in a layout")
@@ -122,7 +181,7 @@ class BoardLayout(QtCore.QObject):
         self.widgets.remove(w)
         w.setParent(None)
 
-    def deleteWidgets(self, function: Callable[[QtWidgets.QWidget], bool] = lambda w: True) -> None:
+    def deleteWidgets(self, function: Callable[[QtWidgets.QWidget], bool]=lambda w: True) -> None:
         list(map(QtWidgets.QWidget.deleteLater, filter(function, self.widgets)))
         self.widgets = list(filter(lambda w: not function(w), self.widgets))
 
@@ -130,7 +189,7 @@ class BoardLayout(QtCore.QObject):
         if watched == self.parent() and event.type() == QtCore.QEvent.Resize:
             watched.heightForWidth(max(watched.width(), watched.height()))
             for w in self.widgets:
-                self.adjustWidget(w)
+                self.adjustWidgetFunction(w)
             return True
         return super().eventFilter(watched, event)
 

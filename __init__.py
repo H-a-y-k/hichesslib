@@ -16,9 +16,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-
 """
-
+A chess game written in python with PySide2 and python-chess.
+Supports PVP.
+PVE and multiplayer are to be added.
 """
 
 __author__ = "Haik Sargsian"
