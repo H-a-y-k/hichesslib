@@ -27,8 +27,6 @@ from enum import Enum
 from functools import partial
 from typing import Optional, Mapping
 
-from . import resources
-
 
 class IllegalMove(Exception):
     pass
@@ -39,6 +37,10 @@ class CellType(Enum):
     PIECE = 1
 
 
+CELL_PLAIN = CellType.PLAIN
+CELL_PIECE = CellType.PIECE
+
+
 class CellWidget(QtWidgets.QPushButton):
     """
     """
@@ -46,30 +48,54 @@ class CellWidget(QtWidgets.QPushButton):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
 
-        self.cellType = CellType.PLAIN
-        self.isHighlighted = False
-        self.setSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding,
-                           QtWidgets.QSizePolicy.MinimumExpanding)
+        self.cellType = CELL_PLAIN
+        self.setProperty("highlighted", False)
+
+        self.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
+                           QtWidgets.QSizePolicy.Expanding)
         self.sizePolicy().setHeightForWidth(True)
+        self.setAutoExclusive(True)
 
-    def toPiece(self, piece: chess.Piece):
-        self.cellType = CellType.PIECE
-        colorName = chess.COLOR_NAMES[piece.color]
+    def toPiece(self, piece: chess.Piece) -> "CellWidget":
+        self.setCheckable(True)
+        self.cellType = CELL_PIECE
+        pieceColor = chess.COLOR_NAMES[piece.color]
         pieceName = chess.PIECE_NAMES[piece.piece_type]
-        self.setStyleSheet(f"border-image: url(:/images/{colorName}_{pieceName}.png) 2 2 2 2 stretch stretch;")
+        self.setObjectName(f"{pieceColor}_{pieceName}")
+        self._updateStyle()
+        return self
 
-    def highlight(self):
-        pass
+    def toPlain(self) -> "CellWidget":
+        self.cellType = CELL_PLAIN
+        self.setCheckable(False)
+        self.setObjectName("plain_cell")
+        self._updateStyle()
+        return self
 
-    def unhighlight(self):
-        pass
+    def isHighlighted(self) -> bool:
+        return self.property("highlighted")
+
+    def highlight(self) -> "CellWidget":
+        self.setProperty("highlighted", True)
+        self._updateStyle()
+        self.setCheckable(False)
+        return self
+
+    def unhighlight(self) -> "CellWidget":
+        self.setProperty("highlighted", False)
+        self._updateStyle()
+        self.setCheckable(True)
+        return self
+
+    def _updateStyle(self):
+        self.style().unpolish(self)
+        self.style().polish(self)
 
 
 class BoardWidget(QtWidgets.QLabel):
     """
     A graphical chess board.
     """
-
     def __init__(self, parent=None,
                  fen: Optional[str] = chess.STARTING_FEN,
                  flipped: bool = False):
@@ -77,15 +103,22 @@ class BoardWidget(QtWidgets.QLabel):
 
         self.board = chess.Board(fen)
         self.flipped = flipped
-        self.toggledWidget = None
+        self.defaultPixmap = self.pixmap()
+        self.flippedPixmap = self.pixmap()
+        self.toggled = None
 
         self._boardLayout = QtWidgets.QGridLayout()
         self._boardLayout.setContentsMargins(0, 0, 0, 0)
         self._boardLayout.setSpacing(0)
 
+        def cn(w):
+            w.clicked.connect(lambda: self.onPieceCellWidgetClicked(w))
+            w.toggled.connect(lambda toggled: self.onPieceCellWidgetToggled(w, toggled))
+
         for i in range(8):
             for j in range(8):
                 cellWidget = CellWidget()
+                cn(cellWidget)
                 self._boardLayout.addWidget(cellWidget, i, j)
         self.setLayout(self._boardLayout)
 
@@ -93,29 +126,61 @@ class BoardWidget(QtWidgets.QLabel):
 
         self.setAutoFillBackground(True)
         self.setScaledContents(True)
-        self._setBoardPixmap()
-        #self.setStyleSheet("QPushButton { background: transparent; }")
+        self.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
+                           QtWidgets.QSizePolicy.Ignored)
 
-    def cellWidgetAt(self, square: chess.Square) -> Optional[CellWidget]:
+    def cellIndexOfSquare(self, square: chess.Square):
+        if not self.flipped:
+            return chess.square_mirror(square)
+        else:
+            return square
+
+    def squareOf(self, w: CellWidget) -> chess.Square:
+        i = self._boardLayout.indexOf(w)
+        if not self.flipped:
+            return chess.square_mirror(i)
+        else:
+            return i
+
+    def cellWidgetAtSquare(self, square: chess.Square) -> Optional[CellWidget]:
         """
         Returns the cell widget at the given square.
         """
 
-        item = self._boardLayout.itemAtPosition(chess.square_rank(square),
-                                                chess.square_file(square))
+        item = self._boardLayout.itemAt(self.cellIndexOfSquare(square))
         if item is not None:
             return item.widget()
         return None
 
+    def updatePixmap(self):
+        if not self.flipped:
+            self.setPixmap(self.defaultPixmap)
+        else:
+            self.setPixmap(self.flippedPixmap)
+
+    def setBoardPixmap(self, defaultPixmap, flippedPixmap):
+        self.defaultPixmap = defaultPixmap
+        self.flippedPixmap = flippedPixmap
+        self.updatePixmap()
+
+    @QtCore.Slot()
+    def onPieceCellWidgetClicked(self, w: CellWidget):
+        if w.isHighlighted():
+            self.pushPiece(self.squareOf(w), self.toggled)
+
     @QtCore.Slot()
     def onPieceCellWidgetToggled(self, w: CellWidget, toggled: bool):
-        self.unhighlightCells()
-
         if toggled:
-            self.toggledWidget = w
-            self.highlightLegalMovesFor(w)
-        else:
-            self.toggledWidget = None
+            self.unhighlightCells()
+            self.highlightLegalMoveCellsFor(w)
+            self.toggled = w
+
+    def setPieceAt(self, square: chess.Square, piece: chess.Piece) -> CellWidget:
+        self.board.set_piece_at(square, piece)
+        w = self.cellWidgetAtSquare(square)
+        w.toPiece(piece)
+        w.setCheckable(True)
+        return w
 
     def addPiece(self, square: chess.Square, piece: chess.Piece) -> CellWidget:
         """
@@ -135,24 +200,19 @@ class BoardWidget(QtWidgets.QLabel):
         """
 
         if self.board.piece_at(square) is not None:
-            raise ValueError("Square {} is already occupied")
-
-        self.board.set_piece_at(square, piece)
-        w = self.cellWidgetAt(square)
-        w.toPiece(piece)
-        return w
+            raise ValueError("Square {} is occupied")
+        return self.setPieceAt(square, piece)
 
     def synchronizeBoard(self) -> None:
         for i in range(self._boardLayout.count()):
             self._boardLayout.itemAt(i).widget().toPlain()
 
         for square, piece in self.board.piece_map().items():
-            self.cellWidgetAt(square).toPiece(piece)
+            self.setPieceAt(square, piece)
 
     def setPieceMap(self, pieces: Mapping[int, chess.Piece]) -> None:
         self.board.set_piece_map(pieces)
-        for square, piece in pieces.items():
-            self.cellWidgetAt(square).toPiece(piece)
+        self.synchronizeBoard()
 
     def setFen(self, fen: str) -> None:
         self.board.set_fen(fen)
@@ -166,12 +226,10 @@ class BoardWidget(QtWidgets.QLabel):
                 return chess.A8 <= move.to_square <= chess.H8
             elif piece.color == chess.BLACK:
                 return chess.A1 <= move.to_square <= chess.H1
-
         return False
 
     def pushPiece(self, toSquare: chess.Square, w: CellWidget) -> None:
-        move = chess.Move(w.square, toSquare)
-
+        move = chess.Move(self.squareOf(w), toSquare)
         # TODO
         if self.isPseudoLegalPromotion(move):
             # TODO Create a promotion dialogue
@@ -179,9 +237,8 @@ class BoardWidget(QtWidgets.QLabel):
             w.toPiece(move.promotion)
 
         if not self.board.is_legal(move):
-            raise IllegalMove(f"illegal move {move} with {chess.PIECE_NAMES[w.piece.piece_type]}")
-
-        logging.debug(f"\n{self.board.lan(move)} ({w.square} -> {toSquare})")
+            raise IllegalMove(f"illegal move {move} with {chess.PIECE_NAMES[self.board.piece_at(move.from_square).piece_type]}")
+        logging.debug(f"\n{self.board.lan(move)} ({move.from_square} -> {toSquare})")
 
         self.board.push(move)
         self.synchronizeBoard()
@@ -191,7 +248,7 @@ class BoardWidget(QtWidgets.QLabel):
         self.unhighlightCells()
 
     def push(self, move: chess.Move) -> "BoardWidget":
-        self.pushPiece(move.to_square, self.pieceCellWidgetAt(move.from_square))
+        self.pushPiece(move.to_square, self.cellWidgetAtSquare(move.from_square))
         return self
 
     def pop(self) -> "BoardWidget":
@@ -200,24 +257,21 @@ class BoardWidget(QtWidgets.QLabel):
         return self
 
     def highlightLegalMoveCellsFor(self, w: CellWidget) -> None:
-        pass
+        for move in self.board.legal_moves:
+            if move.from_square == self.squareOf(w):
+                self.cellWidgetAtSquare(move.to_square).highlight()
 
     def unhighlightCells(self) -> None:
-        pass
+        for w in self.children():
+            if isinstance(w, CellWidget):
+                w.unhighlight()
 
     def flip(self) -> "BoardWidget":
         self.flipped = not self.flipped
-        self._setBoardPixmap()
-
-        # TODO
+        self.updatePixmap()
+        self.synchronizeBoard()
         return self
 
     def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self.heightForWidth(min(self.width(), self.height()))
-
-    def _setBoardPixmap(self):
-        if self.flipped:
-            self.setPixmap(QtGui.QPixmap(":/images/flipped_chessboard.png"))
-        else:
-            self.setPixmap(QtGui.QPixmap(":/images/chessboard.png"))
+        s = min(self.width(), self.height())
+        self.resize(s, s)
