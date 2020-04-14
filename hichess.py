@@ -49,6 +49,7 @@ class CellWidget(QtWidgets.QPushButton):
         super().__init__(parent=parent)
 
         self.cellType = CELL_PLAIN
+        self.toPlain()
         self.setProperty("highlighted", False)
 
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
@@ -56,20 +57,23 @@ class CellWidget(QtWidgets.QPushButton):
         self.sizePolicy().setHeightForWidth(True)
         self.setAutoExclusive(True)
 
-    def toPiece(self, piece: chess.Piece) -> "CellWidget":
-        self.setCheckable(True)
-        self.cellType = CELL_PIECE
-        pieceColor = chess.COLOR_NAMES[piece.color]
-        pieceName = chess.PIECE_NAMES[piece.piece_type]
-        self.setObjectName(f"{pieceColor}_{pieceName}")
-        self._updateStyle()
-        return self
-
     def toPlain(self) -> "CellWidget":
         self.cellType = CELL_PLAIN
         self.setCheckable(False)
-        self.setObjectName("plain_cell")
+        self.setObjectName("")
         self._updateStyle()
+
+        return self
+
+    def toPiece(self, piece: chess.Piece) -> "CellWidget":
+        self.setCheckable(True)
+        self.cellType = CELL_PIECE
+
+        pieceColor = chess.COLOR_NAMES[piece.color]
+        pieceName = chess.PIECE_NAMES[piece.piece_type]
+        self.setObjectName(f"cell_{pieceColor}_{pieceName}")
+        self._updateStyle()
+
         return self
 
     def isHighlighted(self) -> bool:
@@ -77,14 +81,14 @@ class CellWidget(QtWidgets.QPushButton):
 
     def highlight(self) -> "CellWidget":
         self.setProperty("highlighted", True)
-        self._updateStyle()
         self.setCheckable(False)
+        self._updateStyle()
         return self
 
     def unhighlight(self) -> "CellWidget":
         self.setProperty("highlighted", False)
-        self._updateStyle()
         self.setCheckable(True)
+        self._updateStyle()
         return self
 
     def _updateStyle(self):
@@ -96,6 +100,7 @@ class BoardWidget(QtWidgets.QLabel):
     """
     A graphical chess board.
     """
+
     def __init__(self, parent=None,
                  fen: Optional[str] = chess.STARTING_FEN,
                  flipped: bool = False):
@@ -105,21 +110,22 @@ class BoardWidget(QtWidgets.QLabel):
         self.flipped = flipped
         self.defaultPixmap = self.pixmap()
         self.flippedPixmap = self.pixmap()
-        self.toggled = None
+        self.lastCheckedCellWidget = None
 
         self._boardLayout = QtWidgets.QGridLayout()
         self._boardLayout.setContentsMargins(0, 0, 0, 0)
         self._boardLayout.setSpacing(0)
 
-        def cn(w):
-            w.clicked.connect(lambda: self.onPieceCellWidgetClicked(w))
-            w.toggled.connect(lambda toggled: self.onPieceCellWidgetToggled(w, toggled))
+        def newCellWidget() -> CellWidget:
+            cellWidget = CellWidget()
+            cellWidget.clicked.connect(partial(self.onCellWidgetClicked, cellWidget))
+            cellWidget.toggled.connect(lambda toggled: self.onPieceCellWidgetToggled(cellWidget, toggled))
+            return cellWidget
 
         for i in range(8):
             for j in range(8):
-                cellWidget = CellWidget()
-                cn(cellWidget)
-                self._boardLayout.addWidget(cellWidget, i, j)
+                w = newCellWidget()
+                self._boardLayout.addWidget(w, i, j)
         self.setLayout(self._boardLayout)
 
         self.setPieceMap(self.board.piece_map())
@@ -164,16 +170,16 @@ class BoardWidget(QtWidgets.QLabel):
         self.updatePixmap()
 
     @QtCore.Slot()
-    def onPieceCellWidgetClicked(self, w: CellWidget):
+    def onCellWidgetClicked(self, w: CellWidget):
         if w.isHighlighted():
-            self.pushPiece(self.squareOf(w), self.toggled)
+            self.pushPiece(self.squareOf(w), self.lastCheckedCellWidget)
 
     @QtCore.Slot()
     def onPieceCellWidgetToggled(self, w: CellWidget, toggled: bool):
         if toggled:
             self.unhighlightCells()
             self.highlightLegalMoveCellsFor(w)
-            self.toggled = w
+            self.lastCheckedCellWidget = w
 
     def setPieceAt(self, square: chess.Square, piece: chess.Piece) -> CellWidget:
         self.board.set_piece_at(square, piece)
@@ -230,6 +236,7 @@ class BoardWidget(QtWidgets.QLabel):
 
     def pushPiece(self, toSquare: chess.Square, w: CellWidget) -> None:
         move = chess.Move(self.squareOf(w), toSquare)
+
         # TODO
         if self.isPseudoLegalPromotion(move):
             # TODO Create a promotion dialogue
