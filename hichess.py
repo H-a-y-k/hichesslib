@@ -25,7 +25,7 @@ import chess
 import logging
 from enum import Enum
 from functools import partial
-from typing import Optional, Mapping, Generator
+from typing import Optional, Mapping, Generator, NoReturn
 
 
 class IllegalMove(Exception):
@@ -172,6 +172,41 @@ ONLY_BLACK_SIDE = AccessibleSides.ONLY_BLACK
 BOTH_SIDES = AccessibleSides.BOTH
 
 
+class _PromotionDialog(QtWidgets.QDialog):
+    OptionOrder = bool
+    QUEEN_ON_BOTTOM, QUEEN_ON_TOP = [True, False]
+
+    def __init__(self, parent=None, color: bool = chess.WHITE,
+                 order: OptionOrder = QUEEN_ON_TOP):
+        super().__init__(parent)
+
+        self.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.FramelessWindowHint | QtCore.Qt.Tool)
+
+        self.chosenPiece = chess.QUEEN
+
+        def makePiece(pieceType):
+            w = CellWidget.makePiece(chess.Piece(pieceType, color))
+            w.clicked.connect(partial(self.onPieceChosen, pieceType))
+            return w
+
+        layout = QtWidgets.QVBoxLayout()
+        options = [chess.QUEEN, chess.KNIGHT, chess.ROOK, chess.BISHOP]
+
+        if order == self.QUEEN_ON_TOP:
+            [layout.addWidget(makePiece(option))
+             for option in options]
+        else:
+            [layout.addWidget(makePiece(option))
+             for option in options[::-1]]
+
+        self.setLayout(layout)
+
+    @QtCore.Slot()
+    def onPieceChosen(self, pieceType):
+        self.chosenPiece = pieceType
+        self.accept()
+
+
 class BoardWidget(QtWidgets.QLabel):
     """
     A graphical chess board.
@@ -209,7 +244,8 @@ class BoardWidget(QtWidgets.QLabel):
                 self._boardLayout.addWidget(newCellWidget(), i, j)
         self.setLayout(self._boardLayout)
 
-        self.setPieceMap(self.board.piece_map())
+        self.setFen(self.board.fen())
+
         self.setAutoFillBackground(True)
         self.setScaledContents(True)
         self.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
@@ -255,13 +291,13 @@ class BoardWidget(QtWidgets.QLabel):
         self.flippedPixmap = flippedPixmap
         self._updatePixmap()
 
-    @QtCore.Slot()
-    def onCellWidgetClicked(self, w: CellWidget):
+    @QtCore.Slot(result=NoReturn)
+    def onCellWidgetClicked(self, w):
         if w.isHighlighted():
             self.pushPiece(self.squareOf(w), self.lastCheckedCellWidget)
 
-    @QtCore.Slot()
-    def onCellWidgetToggled(self, w: CellWidget, toggled: bool):
+    @QtCore.Slot(result=NoReturn)
+    def onCellWidgetToggled(self, w: CellWidget, toggled: bool) -> None:
         self.unhighlightCells()
         if toggled:
             self.uncheckCells(exceptFor=w)
@@ -269,27 +305,14 @@ class BoardWidget(QtWidgets.QLabel):
             self.highlightLegalMoveCellsFor(w)
             self.lastCheckedCellWidget = w
 
-    @QtCore.Slot()
-    def onCellWidgetMarked(self, marked: bool):
+    @QtCore.Slot(result=NoReturn)
+    def onCellWidgetMarked(self, marked: bool) -> None:
         if marked:
             self.uncheckCells()
             self.unhighlightCells()
 
     def setPieceAt(self, square: chess.Square, piece: chess.Piece) -> CellWidget:
-        self.board.set_piece_at(square, piece)
-        w = self.cellWidgetAtSquare(square)
-
-        if self.accessibleSides == BOTH_SIDES:
-            w.isAccessible = True
-        elif piece.color == chess.WHITE:
-            if self.accessibleSides == ONLY_WHITE_SIDE:
-                w.isAccessible = True
-        elif self.accessibleSides == ONLY_BLACK_SIDE:
-            w.isAccessible = True
-
-        w.toPiece(piece)
-
-        return w
+        return self._setPieceAt(square, piece)
 
     def removePieceAt(self, square: chess.Square) -> CellWidget:
         w = self.cellWidgetAtSquare(square)
@@ -320,7 +343,7 @@ class BoardWidget(QtWidgets.QLabel):
 
         if self.board.piece_at(square) is not None:
             raise ValueError("Square {} is occupied")
-        return self.setPieceAt(square, piece)
+        return self._setPieceAt(square, piece)
 
     def synchronize(self) -> None:
         def callback(w):
@@ -333,14 +356,17 @@ class BoardWidget(QtWidgets.QLabel):
 
     def setPieceMap(self, pieces: Mapping[int, chess.Piece]) -> None:
         self.board.set_piece_map(pieces)
+        self.unhighlightCells()
         self.synchronize()
 
     def setFen(self, fen: Optional[str]) -> None:
         self.board = chess.Board(fen)
+        self.unhighlightCells()
         self.synchronize()
 
     def clear(self):
         self.board.clear()
+        self.unhighlightCells()
         self.synchronize()
 
     def movePieceAt(self, fromSquare: chess.Square, toSquare: chess.Square) -> None:
@@ -357,6 +383,7 @@ class BoardWidget(QtWidgets.QLabel):
 
     def pop(self) -> None:
         self.board.pop()
+        self.unmarkCells()
         self.synchronize()
 
     def highlightLegalMoveCellsFor(self, w: CellWidget) -> None:
@@ -385,11 +412,13 @@ class BoardWidget(QtWidgets.QLabel):
     def flipped(self, flipped: bool) -> None:
         if self._flipped != flipped:
             self._flipped = flipped
+            self.unhighlightCells()
             self.synchronize()
             self._updatePixmap()
 
     def flip(self) -> None:
         self._flipped = not self._flipped
+        self.unhighlightCells()
         self.synchronize()
         self._updatePixmap()
 
@@ -402,6 +431,22 @@ class BoardWidget(QtWidgets.QLabel):
         self._accessibleSides = accessibleSides
         self.synchronize()
 
+    def _setPieceAt(self, square: chess.Square, piece: chess.Piece) -> CellWidget:
+        self.board.set_piece_at(square, piece)
+        w = self.cellWidgetAtSquare(square)
+
+        if self.accessibleSides == BOTH_SIDES:
+            w.isAccessible = True
+        elif piece.color == chess.WHITE:
+            if self.accessibleSides == ONLY_WHITE_SIDE:
+                w.isAccessible = True
+        elif self.accessibleSides == ONLY_BLACK_SIDE:
+            w.isAccessible = True
+
+        w.toPiece(piece)
+
+        return w
+
     def _updatePixmap(self) -> None:
         if not self._flipped:
             self.setPixmap(self.defaultPixmap)
@@ -413,43 +458,30 @@ class BoardWidget(QtWidgets.QLabel):
         self.synchronize()
 
     def _push(self, move: chess.Move) -> None:
-        w = self.cellWidgetAtSquare(move.from_square)
-
-        if self.isPseudoLegalPromotion(move):
+        if move.promotion is None and self.isPseudoLegalPromotion(move):
             turn = self.board.turn
-
-            """
-            promotionDialog = QtWidgets.QDialog()
-            promotionDialog.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.FramelessWindowHint)
-            lyt = QtWidgets.QVBoxLayout()
-            options = [chess.Piece(pieceType, turn)
-                       for pieceType in [chess.QUEEN, chess.KNIGHT, chess.ROOK, chess.BISHOP]]
-            if not self._flipped:
-                [lyt.addWidget(CellWidget.makePiece(piece))
-                 for piece in options]
-            else:
-                [lyt.addWidget(CellWidget.makePiece(piece))
-                 for piece in options[::-1]]
-            lyt.addWidget(CellWidget.makePiece(chess.Piece(chess.QUEEN, turn)))
-            lyt.addWidget(CellWidget.makePiece(chess.Piece(chess.KNIGHT, turn)))
-            lyt.addWidget(CellWidget.makePiece(chess.Piece(chess.ROOK, turn)))
-            lyt.addWidget(CellWidget.makePiece(chess.Piece(chess.BISHOP, turn)))
-
             w = self.cellWidgetAtSquare(move.to_square)
-            promotionDialog.setLayout(lyt)
-            promotionDialog.move(self.mapToGlobal(w.pos()))
+
+            def callback():
+                move.promotion = promotionDialog.chosenPiece
+
+            promotionDialog = _PromotionDialog(parent=self, color=turn,
+                                               order=self._flipped)
+            promotionDialog.accepted.connect(callback)
+            if not self._flipped and turn:
+                promotionDialog.move(self.mapToGlobal(w.pos()))
+            else:
+                promotionDialog.move(self.mapToGlobal(QtCore.QPoint(w.x(), w.y() - 3*w.height())))
             promotionDialog.setFixedWidth(w.width())
-            promotionDialog.setFixedHeight(4*w.height())
+            promotionDialog.setFixedHeight(4 * w.height())
             promotionDialog.exec_()
-            """
-            move.promotion = chess.QUEEN
-            w.toPiece(chess.Piece(move.promotion, turn))
 
         if not self.board.is_legal(move):
             raise IllegalMove(f"illegal move {move}")
         logging.debug(f"\n{self.board.lan(move)} ({move.from_square} -> {move.to_square})")
 
-        self.movePieceAt(move.from_square, move.to_square)
+        self.board.push(move)
+        self.synchronize()
         self.moveMade.emit(move.uci())
         logging.debug(f"\n{self.board}\n")
 

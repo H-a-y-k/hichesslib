@@ -18,8 +18,6 @@
 
 """
 A chess game written in python with PySide2 and python-chess.
-Supports PVP.
-PVE and multiplayer are to be added.
 """
 
 __author__ = "Haik Sargsian"
