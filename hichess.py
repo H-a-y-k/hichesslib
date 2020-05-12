@@ -18,34 +18,21 @@
 
 import PySide2.QtWidgets as QtWidgets
 import PySide2.QtCore as QtCore
-from PySide2.QtGui import QPixmap
+from PySide2.QtGui import QPixmap, QPalette, QColor
 
 import chess
 
 import logging
 from enum import Enum
 from functools import partial
-from typing import Optional, Mapping, Generator, NoReturn
+from typing import Optional, Mapping, Generator
+from collections import deque
+
+import math
 
 
 class IllegalMove(Exception):
     pass
-
-
-class MarkColor(Enum):
-    MAIN = 0
-    ALT1 = 1
-    ALT2 = 2
-    ALT3 = 3
-
-
-MARK_COLOR_MAIN = MarkColor.MAIN
-MARK_COLOR_ALT1 = MarkColor.ALT1
-MARK_COLOR_ALT2 = MarkColor.ALT2
-MARK_COLOR_ALT3 = MarkColor.ALT3
-
-
-# TODO implement alternative colors
 
 
 class CellWidget(QtWidgets.QPushButton):
@@ -62,10 +49,11 @@ class CellWidget(QtWidgets.QPushButton):
         self._isCheckedKing = False
         self._isHighlighted = False
         self._isMarked = False
+        self._justMoved = False
         self.setObjectName("cell_plain")
-        self.setCheckable(False)
-        self._updateStyle()
+        self.setCheckable(self.isAccessible)
 
+        self.setFocusPolicy(QtCore.Qt.NoFocus)
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
                            QtWidgets.QSizePolicy.Expanding)
 
@@ -81,6 +69,7 @@ class CellWidget(QtWidgets.QPushButton):
         else:
             self.setObjectName("cell_plain")
             self.setCheckable(False)
+
         self._updateStyle()
 
     def isPlain(self) -> bool:
@@ -145,20 +134,29 @@ class CellWidget(QtWidgets.QPushButton):
     def unmark(self):
         self.setMarked(False)
 
+    def justMoveed(self) -> bool:
+        return self._justMoved
+
+    def setJustMoved(self, jm: bool):
+        self._justMoved = jm
+        self._updateStyle()
+
     def _updateStyle(self):
         self.style().unpolish(self)
         self.style().polish(self)
 
     def mousePressEvent(self, e):
         super().mousePressEvent(e)
-        if e.button() == QtCore.Qt.RightButton:
-            self.setMarked(not self.isMarked())
+        if self.isAccessible:
+            if e.button() == QtCore.Qt.RightButton:
+                self.setMarked(True)
 
     piece = QtCore.Property(bool, isPiece, setPiece)
     plain = QtCore.Property(bool, isPlain)
     checkedKing = QtCore.Property(bool, isCheckedKing, setIsCheckedKing)
     highlighted = QtCore.Property(bool, isHighlighted, setHighlighted)
     marked = QtCore.Property(bool, isMarked, setMarked, notify=designated)
+    justMoved = QtCore.Property(bool, justMoveed, setJustMoved)
 
 
 class AccessibleSides(Enum):
@@ -223,6 +221,8 @@ class BoardWidget(QtWidgets.QLabel):
         super().__init__(parent=parent)
 
         self.board = chess.Board(fen)
+        self.pop_stack = deque()
+
         self._flipped = flipped
         self._accessibleSides = sides
 
@@ -234,7 +234,7 @@ class BoardWidget(QtWidgets.QLabel):
         self._boardLayout.setContentsMargins(0, 0, 0, 0)
         self._boardLayout.setSpacing(0)
 
-        def newCellWidget() -> CellWidget:
+        def newCellWidget():
             cellWidget = CellWidget()
             cellWidget.clicked.connect(partial(self.onCellWidgetClicked, cellWidget))
             cellWidget.toggled.connect(partial(self.onCellWidgetToggled, cellWidget))
@@ -301,22 +301,30 @@ class BoardWidget(QtWidgets.QLabel):
         self.flippedPixmap = flippedPixmap
         self._updatePixmap()
 
-    @QtCore.Slot(result=NoReturn)
+    @QtCore.Slot()
     def onCellWidgetClicked(self, w):
-        if w.isHighlighted():
-            self.pushPiece(self.squareOf(w), self.lastCheckedCellWidget)
-
-    @QtCore.Slot(result=NoReturn)
-    def onCellWidgetToggled(self, w: CellWidget, toggled: bool) -> None:
-        self.unhighlightCells()
-        if toggled:
-            self.uncheckCells(exceptFor=w)
+        if not w.marked:
             self.unmarkCells()
-            self.highlightLegalMoveCellsFor(w)
-            self.lastCheckedCellWidget = w
+        if w.highlighted:
+            self.pushPiece(self.squareOf(w), self.lastCheckedCellWidget)
+        elif not w.piece:
+            self.unhighlightCells()
+            self.uncheckCells()
 
-    @QtCore.Slot(result=NoReturn)
-    def onCellWidgetMarked(self, marked: bool) -> None:
+    @QtCore.Slot()
+    def onCellWidgetToggled(self, w: CellWidget, toggled: bool):
+        if chess.COLOR_NAMES[self.board.turn] != w.objectName().split('_')[1]:
+            w.setChecked(False)
+        else:
+            self.unhighlightCells()
+            if toggled:
+                self.uncheckCells(exceptFor=w)
+                self.unmarkCells()
+                self.highlightLegalMoveCellsFor(w)
+                self.lastCheckedCellWidget = w
+
+    @QtCore.Slot()
+    def onCellWidgetMarked(self, marked: bool):
         if marked:
             self.uncheckCells()
             self.unhighlightCells()
@@ -357,10 +365,14 @@ class BoardWidget(QtWidgets.QLabel):
         def callback(w):
             if not w.isPlain():
                 w.toPlain()
+            elif self.accessibleSides != NO_SIDE:
+                w.isAccessible = True
 
+        temp = self.board.copy()
         list(map(callback, self.cellWidgets()))
         for square, piece in self.board.piece_map().items():
-            self.setPieceAt(square, piece)
+            self._setPieceAt(square, piece)
+        self.board = temp
 
     def setPieceMap(self, pieces: Mapping[int, chess.Piece]) -> None:
         self.board.set_piece_map(pieces)
@@ -377,11 +389,9 @@ class BoardWidget(QtWidgets.QLabel):
         self.unhighlightCells()
         self.synchronize()
 
-    def movePieceAt(self, fromSquare: chess.Square, toSquare: chess.Square) -> None:
-        self._movePiece(chess.Move(fromSquare, toSquare))
-
-    def movePiece(self, toSquare: chess.Square, w: CellWidget) -> None:
-        self._movePiece(chess.Move(self.squareOf(w), toSquare))
+    def makeMove(self, move: chess.Move):
+        self.board.push(move)
+        self.synchronize()
 
     def pushPiece(self, toSquare: chess.Square, w: CellWidget) -> None:
         self._push(chess.Move(self.squareOf(w), toSquare))
@@ -389,10 +399,51 @@ class BoardWidget(QtWidgets.QLabel):
     def push(self, move: chess.Move) -> None:
         self._push(move)
 
-    def pop(self) -> None:
-        self.board.pop()
+    def pop(self) -> chess.Move:
+        move = self.board.pop()
+
+        self.pop_stack.append(move)
+
+        self.cellWidgetAtSquare(move.from_square).justMoved = False
+        self.cellWidgetAtSquare(move.to_square).justMoved = False
+
+        if self.board.move_stack:
+            lastMove = self.board.move_stack[-1]
+            self.cellWidgetAtSquare(lastMove.from_square).justMoved = True
+            self.cellWidgetAtSquare(lastMove.to_square).justMoved = True
+
         self.unmarkCells()
+        self.unhighlightCells()
         self.synchronize()
+
+        if self.board.is_check():
+            self.king(self.board.turn).check()
+        else:
+            self.king(self.board.turn).uncheck()
+            self.king(not self.board.turn).uncheck()
+
+        return move
+
+    def unpop(self):
+        move = self.pop_stack.pop()
+
+        if self.board.move_stack:
+            lastMove = self.board.move_stack[-1]
+            self.cellWidgetAtSquare(lastMove.from_square).justMoved = False
+            self.cellWidgetAtSquare(lastMove.to_square).justMoved = False
+
+        self.cellWidgetAtSquare(move.from_square).justMoved = True
+        self.cellWidgetAtSquare(move.to_square).justMoved = True
+
+        self.unmarkCells()
+        self.unhighlightCells()
+        self.makeMove(move)
+
+        if self.board.is_check():
+            self.king(self.board.turn).check()
+        else:
+            self.king(self.board.turn).uncheck()
+            self.king(not self.board.turn).uncheck()
 
     def highlightLegalMoveCellsFor(self, w: CellWidget):
         for square in self.pieceCanBePushedTo(w):
@@ -440,15 +491,17 @@ class BoardWidget(QtWidgets.QLabel):
 
     def _setPieceAt(self, square: chess.Square, piece: chess.Piece) -> CellWidget:
         self.board.set_piece_at(square, piece)
+
         w = self.cellWidgetAtSquare(square)
 
         if self.accessibleSides == BOTH_SIDES:
             w.isAccessible = True
-        elif piece.color == chess.WHITE:
-            if self.accessibleSides == ONLY_WHITE_SIDE:
+        elif self.accessibleSides == ONLY_WHITE_SIDE:
+            if piece.color == chess.WHITE:
                 w.isAccessible = True
         elif self.accessibleSides == ONLY_BLACK_SIDE:
-            w.isAccessible = True
+            if piece.color == chess.BLACK:
+                w.isAccessible = True
 
         w.setPiece(piece)
 
@@ -460,18 +513,16 @@ class BoardWidget(QtWidgets.QLabel):
         else:
             self.setPixmap(self.flippedPixmap)
 
-    def _movePiece(self, move: chess.Move):
-        self.board.push(move)
-        self.synchronize()
-
     def _push(self, move: chess.Move) -> None:
+        if self.board.move_stack:
+            lastMove = self.board.move_stack[-1]
+            self.cellWidgetAtSquare(lastMove.from_square).justMoved = False
+            self.cellWidgetAtSquare(lastMove.to_square).justMoved = False
+
         turn = self.board.turn
 
-        if move.promotion is None and self.isPseudoLegalPromotion(move):
+        if self.cellWidgetAtSquare(move.from_square).isAccessible and move.promotion is None and self.isPseudoLegalPromotion(move):
             w = self.cellWidgetAtSquare(move.to_square)
-
-            def callback():
-                move.promotion = promotionDialog.chosenPiece
 
             promotionDialog = _PromotionDialog(parent=self, color=turn,
                                                order=self._flipped)
@@ -491,20 +542,24 @@ class BoardWidget(QtWidgets.QLabel):
                 return
 
         if not self.board.is_legal(move):
-            raise IllegalMove(f"illegal move {move}")
+            raise IllegalMove(f"illegal move {move} by ")
         logging.debug(f"\n{self.board.lan(move)} ({move.from_square} -> {move.to_square})")
+
+        self.cellWidgetAtSquare(move.from_square).justMoved = True
+        self.cellWidgetAtSquare(move.to_square).justMoved = True
 
         if self.board.is_check():
             self.king(turn).uncheck()
 
         self.board.push(move)
+        self.pop_stack.clear()
 
         if self.board.is_check():
             self.king(not turn).check()
 
-        self.synchronize()
         self.moveMade.emit(move.uci())
         logging.debug(f"\n{self.board}\n")
+        self.synchronize()
 
         self.unhighlightCells()
         self.unmarkCells()
