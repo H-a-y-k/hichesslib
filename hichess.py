@@ -497,8 +497,10 @@ class BoardWidget(QtWidgets.QLabel):
 
     def clear(self):
         self._updateJustMovedCells(False)
+
         self.king(chess.WHITE).uncheck()
         self.king(chess.BLACK).uncheck()
+
         self.board.clear()
         self._foreachCells(CellWidget.unhighlight, CellWidget.unmark, lambda w: w.setChecked(False))
         self.synchronize()
@@ -630,9 +632,11 @@ class BoardWidget(QtWidgets.QLabel):
 
     def _updatePixmap(self) -> None:
         if not self._flipped:
-            self.setPixmap(self.defaultPixmap)
+            self.setPixmap(self.defaultPixmap.scaled(self.size(), QtCore.Qt.KeepAspectRatio,
+                                                     QtCore.Qt.SmoothTransformation))
         else:
-            self.setPixmap(self.flippedPixmap)
+            self.setPixmap(self.flippedPixmap.scaled(self.size(), QtCore.Qt.KeepAspectRatio,
+                                                     QtCore.Qt.SmoothTransformation))
 
     def _updateJustMovedCells(self, justMoved: bool):
         if self.board.move_stack:
@@ -705,3 +709,8 @@ class BoardWidget(QtWidgets.QLabel):
             self._flipped = flipped
             self.synchronizeAndUpdateStyles()
             self._updatePixmap()
+
+    def resizeEvent(self, event) -> None:
+        s = min(self.width(), self.height())
+        self.resize(s, s)
+        self._updatePixmap()
