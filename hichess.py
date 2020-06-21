@@ -397,15 +397,17 @@ class BoardWidget(QtWidgets.QLabel):
             self.unmarkCells()
         elif not w.piece:
             self._foreachCells(CellWidget.unhighlight, lambda w: w.setChecked(False), CellWidget.unmark)
+        else:
+            self.unmarkCells()
 
     @QtCore.Slot()
     def onCellWidgetToggled(self, w: CellWidget, toggled: bool):
-        if chess.COLOR_NAMES[self.board.turn] != w.objectName().split('_')[1] or not self._isCellAccessible(w):
+        if self.board.turn != w.getPiece().color or not self._isCellAccessible(w):
             w.setChecked(False)
             return
 
         if toggled:
-            if self.popStack:
+            if self.blockBoardOnPop and self.popStack:
                 w.setChecked(False)
                 return
 
@@ -464,8 +466,6 @@ class BoardWidget(QtWidgets.QLabel):
         def callback(w):
             if not w.isPlain():
                 w.toPlain()
-            elif self.accessibleSides != NO_SIDE:
-                w.accessible = True
 
         temp = self.board.copy()
         list(map(callback, self.cellWidgets()))
@@ -709,8 +709,3 @@ class BoardWidget(QtWidgets.QLabel):
             self._flipped = flipped
             self.synchronizeAndUpdateStyles()
             self._updatePixmap()
-
-    def resizeEvent(self, event) -> None:
-        s = min(self.width(), self.height())
-        self.resize(s, s)
-        self._updatePixmap()
