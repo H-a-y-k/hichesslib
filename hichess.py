@@ -18,7 +18,7 @@
 
 import PySide2.QtWidgets as QtWidgets
 import PySide2.QtCore as QtCore
-from PySide2.QtGui import QPixmap, QMouseEvent, QDrag
+from PySide2.QtGui import QPixmap, QMouseEvent, QCursor, QDrag
 
 import chess
 
@@ -62,6 +62,7 @@ class CellWidget(QtWidgets.QPushButton):
         self.setObjectName("cell_plain")
         self.setCheckable(False)
 
+        self.setMouseTracking(True)
         self.setFocusPolicy(QtCore.Qt.NoFocus)
         self.setSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding,
                            QtWidgets.QSizePolicy.MinimumExpanding)
@@ -216,6 +217,9 @@ class CellWidget(QtWidgets.QPushButton):
         self.style().unpolish(self)
         self.style().polish(self)
 
+    def mouseMoveEvent(self, e):
+        e.ignore()
+
     piece = QtCore.Property(bool, isPiece, setPiece)
     plain = QtCore.Property(bool, isPlain)
     inCheck = QtCore.Property(bool, isInCheck, setInCheck)
@@ -286,7 +290,8 @@ class BoardWidget(QtWidgets.QLabel):
     def __init__(self, parent=None,
                  fen: Optional[str] = chess.STARTING_FEN,
                  flipped: bool = False,
-                 sides: AccessibleSides = NO_SIDE):
+                 sides: AccessibleSides = NO_SIDE,
+                 dnd: bool=False):
         super().__init__(parent=parent)
 
         self.board = chess.Board(fen)
@@ -301,9 +306,8 @@ class BoardWidget(QtWidgets.QLabel):
         self.flippedPixmap = QPixmap(self.pixmap())
         self.lastCheckedCellWidget = None
 
-        self.dragPieces = True
+        self.dragAndDrop = dnd
         self._dragWidget = None
-        self._dragStartPos = QtCore.QPoint(0, 0)
 
         self._boardLayout = QtWidgets.QGridLayout()
         self._boardLayout.setContentsMargins(0, 0, 0, 0)
@@ -324,16 +328,53 @@ class BoardWidget(QtWidgets.QLabel):
 
         self.setFen(self.board.fen())
 
+        self.setMouseTracking(True)
         self.setAutoFillBackground(True)
         self.setScaledContents(True)
 
     def eventFilter(self, watched, event: QMouseEvent) -> bool:
-        if event.type() == QtCore.QEvent.MouseButtonRelease:
-            if event.button() == QtCore.Qt.RightButton:
-                if isinstance(watched, CellWidget):
+        if isinstance(watched, CellWidget):
+            if event.type() == QtCore.QEvent.MouseButtonPress:
+                if event.button() == QtCore.Qt.LeftButton:
+                    if self.dragAndDrop and self.accessibleSides != NO_SIDE:
+                        self._dragWidget = QtWidgets.QLabel(self)
+                        self._dragWidget.setAutoFillBackground(True)
+                        self._dragWidget.setFixedSize(watched.size())
+                        self._dragWidget.setScaledContents(True)
+                        self._dragWidget.setStyleSheet("background: transparent;")
+                        self._dragWidget.setPixmap(QPixmap(f":/images/{'_'.join(watched.objectName().split('_')[1:])}.png"))
+
+                        rect = self._dragWidget.geometry()
+                        rect.moveCenter(QCursor.pos())
+                        self._dragWidget.setGeometry(rect)
+
+                        watched.setChecked(not watched.isChecked())
+
+                elif event.button() == QtCore.Qt.RightButton:
                     if self.accessibleSides != NO_SIDE:
                         watched.setMarked(not watched.marked)
+
+            elif event.type() == QtCore.QEvent.MouseButtonRelease:
+                if event.button() == QtCore.Qt.LeftButton:
+                    if self._dragWidget:
+                        self._dragWidget.deleteLater()
+                        self._dragWidget = None
+
+                        for w in self.cellWidgets(lambda w: w.geometry().contains(self.mapFromGlobal(event.globalPos()))):
+                            self.onCellWidgetClicked(w)
+                            return True
+
         return watched.event(event)
+
+    def mouseMoveEvent(self, e):
+        if e.buttons() == QtCore.Qt.LeftButton:
+            if self._dragWidget:
+                if not self._dragWidget.isVisible():
+                    self._dragWidget.show()
+                rect = self._dragWidget.geometry()
+                rect.moveCenter(e.pos())
+                self._dragWidget.setGeometry(rect)
+        super(BoardWidget, self).mouseMoveEvent(e)
 
     def cellWidgets(self, filter=lambda w: True) -> Generator[CellWidget, None, None]:
         for i in range(self._boardLayout.count()):
@@ -402,11 +443,11 @@ class BoardWidget(QtWidgets.QLabel):
 
     @QtCore.Slot()
     def onCellWidgetToggled(self, w: CellWidget, toggled: bool):
-        if self.board.turn != w.getPiece().color or not self._isCellAccessible(w):
-            w.setChecked(False)
-            return
-
         if toggled:
+            if self.board.turn != w.getPiece().color or not self._isCellAccessible(w):
+                w.setChecked(False)
+                return
+
             if self.blockBoardOnPop and self.popStack:
                 w.setChecked(False)
                 return
@@ -507,9 +548,12 @@ class BoardWidget(QtWidgets.QLabel):
 
     def reset(self):
         self._setFlipped(False)
+
         self._updateJustMovedCells(False)
+
         self.king(chess.WHITE).uncheck()
         self.king(chess.BLACK).uncheck()
+
         self.board.reset()
         self.popStack.clear()
         self._foreachCells(CellWidget.unhighlight, CellWidget.unmark, lambda w: w.setChecked(False))
