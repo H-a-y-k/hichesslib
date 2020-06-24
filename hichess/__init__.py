@@ -20,6 +20,9 @@
 A chess game written in python with PySide2 and python-chess.
 """
 
+from hichess import CellWidget, BoardWidget
+
+
 __author__ = "Haik Sargsian"
 
 __email__ = "haiksargsian6@gmail.com"
