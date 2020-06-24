@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# This file is part of the HiChess project.
+# This file is part of the hichesslib project.
 # Copyright (C) 2019-2020 Haik Sargsian <haiksargsian6@gmail.com>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -121,6 +121,7 @@ class CellWidget(QtWidgets.QPushButton):
                 the piece cannot be NoneType as in the definition of the
                 method `setPiece`, because by default cells are created empty.
          """
+
         assert isinstance(piece, chess.Piece)
 
         w = CellWidget()
@@ -295,19 +296,25 @@ class BoardWidget(QtWidgets.QLabel):
     board : chess.Board
         This attribute represents the actual board. Moves and their validation are
         conducted through this object.
+
     popStack : Deque[chess.Move]
         The moves that are popped from the `board.move_stack` through the functions
         `goToMove`, `pop` are stored in this deque.
+
     blockBoardOnPop : bool
         If this attibute is True, the board can't be interracted with unless `popStack`
         is empty.
+
     defaultPixmap : QPixmap
         This is the pixmap that the board will have when the property `flipped` is False.
+
     flippedPixmap : QPixmap
         This is the pixmap that the board will have when the property `flipped` is True.
+
     lastCheckedCellWidget : Optional[CellWidget]
         This variable holds the last CellWidget that was checked through `CellWidget.setChecked(True)`.
         Its value is None in case no CellWidget was checked.
+
     dragAndDrop : bool
         This attribute is used to enable or disable drag and drop.
         When it is True, cell widgets can be dragged, by pressing on them
@@ -424,6 +431,7 @@ class BoardWidget(QtWidgets.QLabel):
         """ Yields all the cell widgets in the board's layout
         that fulfill the predicate's condition.
         """
+
         for i in range(self._boardLayout.count()):
             w = self._boardLayout.itemAt(i).widget()
             if predicate(w):
@@ -439,6 +447,7 @@ class BoardWidget(QtWidgets.QLabel):
         """ Returns the index of the widget at the given square number
         if we started counting from the top left corner of the board.
         """
+
         if not self._flipped:
             return chess.square_mirror(square)
         return chess.square(7 - chess.square_file(square), chess.square_rank(square))
@@ -446,6 +455,7 @@ class BoardWidget(QtWidgets.QLabel):
     def squareOf(self, w: CellWidget) -> chess.Square:
         """ Returns the square number corresponding to the given cell widget.
         """
+
         i = self._boardLayout.indexOf(w)
         if not self.flipped:
             return chess.square_mirror(i)
@@ -465,6 +475,7 @@ class BoardWidget(QtWidgets.QLabel):
         """ Yields the numbers of squares that the piece on the cell widget
         can be legally pushed to.
         """
+
         for move in self.board.legal_moves:
             if move.from_square == self.squareOf(w):
                 yield move.to_square
@@ -479,6 +490,7 @@ class BoardWidget(QtWidgets.QLabel):
         The result of this method is pseudo-true, as it doesn't do any move validation.
         It is the caller's responsibility to validate the move.
         """
+
         piece = self.board.piece_at(move.from_square)
 
         if piece is not None and piece.piece_type == chess.PAWN:
@@ -491,6 +503,7 @@ class BoardWidget(QtWidgets.QLabel):
     def king(self, color: chess.Color) -> Optional[CellWidget]:
         """ Returns the cell widget that holds the king of the given color or None if there is no king.
         """
+
         kingSquare = self.board.king(color)
         if kingSquare is not None:
             return self.cellWidgetAtSquare(kingSquare)
@@ -498,7 +511,9 @@ class BoardWidget(QtWidgets.QLabel):
 
     def setBoardPixmap(self, defaultPixmap, flippedPixmap) -> None:
         """ Sets the default and flipped pixmaps and updates the board's pixmap
-        according to them. """
+        according to them.
+        """
+
         self.defaultPixmap = defaultPixmap
         self.flippedPixmap = flippedPixmap
         self._updatePixmap()
@@ -520,10 +535,12 @@ class BoardWidget(QtWidgets.QLabel):
         ------
         ValueError
             If the cell at the given square does not hold a chess piece.
+
         Returns
         -------
         The cell widget at the given square.
         """
+
         w = self.cellWidgetAtSquare(square)
 
         if w.isPlain():
@@ -536,10 +553,12 @@ class BoardWidget(QtWidgets.QLabel):
 
     def addPieceAt(self, square: chess.Square, piece: chess.Piece) -> CellWidget:
         """ This method is the safer version of `setPieceAt`.
+
         Raises
         ------
         ValueError
             If the given square is already occupied.
+
         Returns
         -------
         The created cell widget.
@@ -559,6 +578,7 @@ class BoardWidget(QtWidgets.QLabel):
         """ Synchronizes the widget with the contents of `board` and updates
         the just moved cells and the king in check.
         """
+
         self._synchronize()
 
         self._updateJustMovedCells(False)
@@ -575,6 +595,7 @@ class BoardWidget(QtWidgets.QLabel):
         The highlighted cells are also unhighlighted, because the positions of
         the pieces change after the change of piece map.
         """
+
         self.board.set_piece_map(pieces)
         self.unhighlightCells()
         self.synchronize()
@@ -584,13 +605,15 @@ class BoardWidget(QtWidgets.QLabel):
         The highlighted cells are also unhighlighted, because the positions of
         the pieces change after the fen.
         """
+
         self.board = chess.Board(fen)
         self.unhighlightCells()
         self.synchronize()
 
-    def clear(self):
+    def clear(self) -> None:
         """ Clears the board widget and resets the properties of the cells.
         """
+
         self._updateJustMovedCells(False)
 
         self.king(chess.WHITE).uncheck()
@@ -601,10 +624,11 @@ class BoardWidget(QtWidgets.QLabel):
         self.foreachCells(CellWidget.unhighlight, CellWidget.unmark, lambda w: w.setChecked(False))
         self.synchronize()
 
-    def reset(self):
+    def reset(self) -> None:
         """ Resets the pieces to their standard positions and resets the
         properties of the board widget and all the piecies inside of its layout.
         """
+
         self._setFlipped(False)
 
         self._updateJustMovedCells(False)
@@ -617,11 +641,13 @@ class BoardWidget(QtWidgets.QLabel):
         self.foreachCells(CellWidget.unhighlight, CellWidget.unmark, lambda w: w.setChecked(False))
         self.synchronize()
 
-    def makeMove(self, move: chess.Move):
+    def makeMove(self, move: chess.Move) -> None:
         """ Makes a move without move validation.
         The move, though, should be pseudo-legal. Otherwise `chess.Board.push(move)`
         will raise an exception. Can be useful when you don't need a promotion dialog
-        or notifications about the game state. """
+        or notifications about the game state.
+        """
+
         self._updateJustMovedCells(False)
         self.board.push(move)
         self._updateJustMovedCells(True)
@@ -660,6 +686,7 @@ class BoardWidget(QtWidgets.QLabel):
         --------
             Last poped move in form of uci.
         """
+
         self._updateJustMovedCells(False)
         lastMove = None
         for i in range(n):
@@ -674,7 +701,9 @@ class BoardWidget(QtWidgets.QLabel):
     def unpop(self, n=1) -> str:
         """ Unpops moves `n` times.
         This method works in the same way as `pop(n)`.
-        For further reference see the latter's documentation. """
+        For further reference see the latter's documentation.
+        """
+
         self._updateJustMovedCells(False)
 
         lastMove = None
@@ -694,6 +723,7 @@ class BoardWidget(QtWidgets.QLabel):
         -------
             True if a move with the given `id` exists. Otherwise returns False.
         """
+
         if id >= 0:
             moveStackLen = len(self.board.move_stack)
             if moveStackLen != id:
@@ -712,6 +742,7 @@ class BoardWidget(QtWidgets.QLabel):
         -------
             The number of highlighted cells as a result of this method's call.
         """
+
         counter = 0
         for square in self.pieceCanBePushedTo(w):
             self.cellWidgetAtSquare(square).highlight()
@@ -723,6 +754,7 @@ class BoardWidget(QtWidgets.QLabel):
         If you want to set checked to False for all the cells, then pass None as an argument to this
         method instead.
         """
+
         def callback(w: CellWidget):
             if w != exceptFor:
                 w.setChecked(False)
