@@ -1,0 +1,3 @@
+chess
+python_chess
+PySide2

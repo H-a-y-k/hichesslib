@@ -98,9 +98,6 @@ class CellWidget(QtWidgets.QPushButton):
             self.setObjectName("cell_plain")
             self.setCheckable(False)
 
-        self.style().unpolish(self)
-        self.style().polish(self)
-
     def isPlain(self) -> bool:
         """ A convinience property indicating if the cell is empty or not.
         """
@@ -143,12 +140,10 @@ class CellWidget(QtWidgets.QPushButton):
         return self._isInCheck
 
     def setInCheck(self, ck: bool) -> None:
-        if self._piece.piece_type == chess.KING:
+        if self._piece and self._piece.piece_type == chess.KING:
             self._isInCheck = ck
-            self.style().unpolish(self)
-            self.style().polish(self)
         else:
-            raise NotAKingError("Trying to (un)check a piece that is not a king.")
+            raise NotAKingError("Trying to (un)check a cell that does not hold a king.")
 
     def check(self) -> None:
         """ A convenience method that sets the property `isInCheck` to True.
@@ -176,8 +171,6 @@ class CellWidget(QtWidgets.QPushButton):
                 self.setCheckable(False)
             else:
                 self.setCheckable(bool(self._piece))
-            self.style().unpolish(self)
-            self.style().polish(self)
 
     def highlight(self) -> None:
         """ A convenience method that sets the property `highlighted` to True.
@@ -200,8 +193,6 @@ class CellWidget(QtWidgets.QPushButton):
     def setMarked(self, marked: bool) -> None:
         self._isMarked = marked
         self.designated.emit(self._isMarked)
-        self.style().unpolish(self)
-        self.style().polish(self)
 
     def mark(self):
         """ A convenience method that sets the property `marked` to True.
@@ -220,8 +211,6 @@ class CellWidget(QtWidgets.QPushButton):
 
     def setJustMoved(self, jm: bool):
         self._justMoved = jm
-        self.style().unpolish(self)
-        self.style().polish(self)
 
     def mouseMoveEvent(self, e):
         e.ignore()
@@ -629,12 +618,13 @@ class BoardWidget(QtWidgets.QLabel):
         properties of the board widget and all the piecies inside of its layout.
         """
 
-        self._setFlipped(False)
-
         self._updateJustMovedCells(False)
 
         self.king(chess.WHITE).uncheck()
         self.king(chess.BLACK).uncheck()
+
+        self._flipped = False
+        self._updatePixmap()
 
         self.board.reset()
         self.popStack.clear()
@@ -726,7 +716,7 @@ class BoardWidget(QtWidgets.QLabel):
 
         if id >= 0:
             moveStackLen = len(self.board.move_stack)
-            if moveStackLen != id:
+            if id <= (moveStackLen + len(self.popStack)):
                 if moveStackLen < id:
                     self.unpop(id - moveStackLen)
                     return True
@@ -863,9 +853,10 @@ class BoardWidget(QtWidgets.QLabel):
 
     def _updatePixmap(self) -> None:
         if not self._flipped:
-            self.setPixmap(self.defaultPixmap.scaled(self.size(), QtCore.Qt.KeepAspectRatio,
-                                                     QtCore.Qt.SmoothTransformation))
-        else:
+            if self.defaultPixmap:
+                self.setPixmap(self.defaultPixmap.scaled(self.size(), QtCore.Qt.KeepAspectRatio,
+                                                         QtCore.Qt.SmoothTransformation))
+        elif self.flippedPixmap:
             self.setPixmap(self.flippedPixmap.scaled(self.size(), QtCore.Qt.KeepAspectRatio,
                                                      QtCore.Qt.SmoothTransformation))
 
@@ -875,7 +866,7 @@ class BoardWidget(QtWidgets.QLabel):
                 w.toPlain()
 
         boardCopy = self.board.copy()
-        list(map(callback, self.cellWidgets()))
+        self.foreachCells(callback)
         for square, piece in self.board.piece_map().items():
             self._setPieceAt(square, piece)
         self.board = boardCopy

@@ -20,7 +20,7 @@
 A chess game written in python with PySide2 and python-chess.
 """
 
-from hichess import CellWidget, BoardWidget
+from hichess.hichess import *
 
 
 __author__ = "Haik Sargsian"
