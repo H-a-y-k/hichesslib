@@ -19,7 +19,7 @@
 import unittest
 from unittest.mock import patch
 
-import hichess
+from context import hichess
 import chess
 import chess.pgn
 

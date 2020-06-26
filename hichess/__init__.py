@@ -27,4 +27,4 @@ __author__ = "Haik Sargsian"
 
 __email__ = "haiksargsian6@gmail.com"
 
-__version__ = "1.2.1"
+__version__ = "1.2.3"

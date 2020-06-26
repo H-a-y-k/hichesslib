@@ -98,6 +98,9 @@ class CellWidget(QtWidgets.QPushButton):
             self.setObjectName("cell_plain")
             self.setCheckable(False)
 
+        self.style().unpolish(self)
+        self.style().polish(self)
+
     def isPlain(self) -> bool:
         """ A convinience property indicating if the cell is empty or not.
         """
@@ -142,6 +145,8 @@ class CellWidget(QtWidgets.QPushButton):
     def setInCheck(self, ck: bool) -> None:
         if self._piece and self._piece.piece_type == chess.KING:
             self._isInCheck = ck
+            self.style().unpolish(self)
+            self.style().polish(self)
         else:
             raise NotAKingError("Trying to (un)check a cell that does not hold a king.")
 
@@ -171,6 +176,8 @@ class CellWidget(QtWidgets.QPushButton):
                 self.setCheckable(False)
             else:
                 self.setCheckable(bool(self._piece))
+            self.style().unpolish(self)
+            self.style().polish(self)
 
     def highlight(self) -> None:
         """ A convenience method that sets the property `highlighted` to True.
@@ -193,6 +200,8 @@ class CellWidget(QtWidgets.QPushButton):
     def setMarked(self, marked: bool) -> None:
         self._isMarked = marked
         self.designated.emit(self._isMarked)
+        self.style().unpolish(self)
+        self.style().polish(self)
 
     def mark(self):
         """ A convenience method that sets the property `marked` to True.
@@ -211,6 +220,8 @@ class CellWidget(QtWidgets.QPushButton):
 
     def setJustMoved(self, jm: bool):
         self._justMoved = jm
+        self.style().unpolish(self)
+        self.style().polish(self)
 
     def mouseMoveEvent(self, e):
         e.ignore()
