@@ -6,7 +6,7 @@ hichesslib is a Python GUI chess library based on [python-chess](https://pypi.or
 The library comes with a board widget that supports the chess rules and provides a set of interactions with the squares of the board and with the board iteself including drag and drop, cell marking, piece movement, board flipping and more.
 
 ## Dependencies
-Requires python version >= 3.6. For other dependencies see requirements.txt.
+Requires python version >= 3.6. For other dependencies see [requirements file](https://github.com/H-a-y-k/hichesslib/blob/master/requirements.txt).
 
 ## Usage
 ### Installation
@@ -26,6 +26,7 @@ To start using the library you need to create a PySide2 application. The library
 ...     sys.exit(app.exec_())
 ```
 
+### Features
 ### Examples
 Minimal examples will be provided in the future.
 
