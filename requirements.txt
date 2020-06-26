@@ -1,2 +1,2 @@
 python_chess
-PySide2
+PySide2==5.12.5a1.dev1591984198
