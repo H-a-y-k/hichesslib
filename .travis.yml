@@ -1,0 +1,33 @@
+language: python
+python:
+  - "3.6"
+  - "3.7"
+  - "pypy3"
+
+cache:
+  directories:
+    - test/games
+
+services:
+  - xvfb
+
+before_install:
+  - sudo apt-get -y libxkbcommon-x11-0
+  - sudo apt-get -y libxcb-icccm4
+  - sudo apt-get -y libxcb-image0
+  - sudo apt-get -y libxcb-keysyms1
+  - sudo apt-get -y libxcb-randr0
+  - sudo apt-get -y libxcb-render-util0
+  - sudo apt-get -y libxcb-xinerama0
+
+install:
+  - python3 -m pip install --upgrade pip
+  - python3 -m pip install --upgrade pip wheel
+  - python3 -m pip install --upgrade setuptools
+  - python3 -m pip install -r requirements.txt
+  - python3 -m pip install --upgrade coveralls
+
+script:
+  - coverage erase
+  - coverage run --source hichess test/test_hichess.py -vv CellWidgetTestCase
+  - coverage run --source hichess test/test_hichess.py -vv BoardWidgetTestCase
