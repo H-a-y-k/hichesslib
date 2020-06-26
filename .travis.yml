@@ -30,5 +30,5 @@ install:
 script:
   - cd test
   - coverage erase
-  - coverage run --source hichess test/test_hichess.py -vv CellWidgetTestCase
-  - coverage run --source hichess test/test_hichess.py -vv BoardWidgetTestCase
+  - coverage run --source hichess test_hichess.py -vv CellWidgetTestCase
+  - coverage run --source hichess test_hichess.py -vv BoardWidgetTestCase
