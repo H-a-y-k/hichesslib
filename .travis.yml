@@ -12,10 +12,11 @@ services:
   - xvfb
 
 install:
-  - pip install --upgrade pip wheel
-  - pip3 install --upgrade setuptools
-  - pip3 install -r requirements.txt
-  - pip3 install --upgrade coveralls
+  - python3 -m pip3 install --upgrade pip3
+  - python3 -m pip3 install --upgrade pip wheel
+  - python3 -m pip3 install --upgrade setuptools
+  - python3 -m pip3 install -r requirements.txt
+  - python3 -m pip3 install --upgrade coveralls
 
 script:
   - coverage erase
