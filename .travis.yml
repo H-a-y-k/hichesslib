@@ -12,13 +12,13 @@ services:
   - xvfb
 
 before_install:
-  - sudo apt-get -y libxkbcommon-x11-0
-  - sudo apt-get -y libxcb-icccm4
-  - sudo apt-get -y libxcb-image0
-  - sudo apt-get -y libxcb-keysyms1
-  - sudo apt-get -y libxcb-randr0
-  - sudo apt-get -y libxcb-render-util0
-  - sudo apt-get -y libxcb-xinerama0
+  - sudo apt-get -y install libxkbcommon-x11-0
+  - sudo apt-get -y install libxcb-icccm4
+  - sudo apt-get -y install libxcb-image0
+  - sudo apt-get -y install libxcb-keysyms1
+  - sudo apt-get -y install libxcb-randr0
+  - sudo apt-get -y install libxcb-render-util0
+  - sudo apt-get -y install libxcb-xinerama0
 
 install:
   - python3 -m pip install --upgrade pip
