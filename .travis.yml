@@ -11,7 +11,7 @@ cache:
 install:
   - pip install --upgrade pip wheel
   - pip3 install --upgrade setuptools
-  - pip3 install --user --index-url=http://download.qt.io/snapshots/ci/pyside/5.12/latest/ pyside2==5.12.0a1.dev1540663531 --trusted-host download.qt.io
+  - pip3 install  --index-url=http://download.qt.io/snapshots/ci/pyside/5.12/latest/ pyside2==5.12.0a1.dev1540663531 --trusted-host download.qt.io
   - pip3 install python_chess
   - pip3 install --upgrade coveralls
 
