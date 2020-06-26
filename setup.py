@@ -16,7 +16,7 @@ setup(
           "python_chess",
           "PySide2"
       ],
-  classifiers=[ 
+  classifiers=[
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Libraries :: Python Modules",
