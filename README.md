@@ -25,8 +25,21 @@ To start using the library you need to create a PySide2 application. The library
 ...     boardWidget.show()
 ...     sys.exit(app.exec_())
 ```
-
 ### Features
+#### CellWidget
+  * CellWidget can contain any chess piece.
+  * Can be marked. Marked cell widgets are easily customizable.
+  * Can be highlighted for displaying the legal moves on the board.
+
+### BoardWidget
+  * BoardWidget supports all the chess rules.
+  * Is easily customizable.
+  * Supports rotation.
+  * Supports drag and drop.
+  * Games are easily traversable.
+  * Interactions can be limited to only one side or for all sides (the latter is for read only boards).
+  * Notifies about the game status (draw/stalemate/checkmate).
+
 ### Examples
 Minimal examples will be provided in the future.
 
