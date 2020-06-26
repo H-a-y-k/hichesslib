@@ -9,9 +9,9 @@ cache:
     - test/games
 
 install:
-  - pip install -r requirements.txt
-  - pip install --upgrade setuptools
-  - pip install --upgrade coveralls
+  - pip3 install -r requirements.txt
+  - pip3 install --upgrade setuptools
+  - pip3 install --upgrade coveralls
 
 script:
   - coverage erase
