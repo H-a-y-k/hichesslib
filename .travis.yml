@@ -11,7 +11,9 @@ cache:
 install:
   - pip install -r requirements.txt
   - pip install --upgrade setuptools
+  - pip install --upgrade coveralls
 
 script:
-  - cd test
-  - python3 test_hichess.py
+  - coverage erase
+  - coverage run --source hichess test_hichess.py -vv CellWidgetTestCase
+  - coverage run --source hichess test_hichess.py -vv BoardWidgetTestCase
