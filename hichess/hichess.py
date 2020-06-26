@@ -43,10 +43,6 @@ class CellWidget(QtWidgets.QPushButton):
     board. It can be marked with different colors.
 
     `CellWidget` by default represents an empty cell.
-
-    Attributes
-    ----------
-        designated : QtCore.Signal(bool)
     """
 
     designated = QtCore.Signal(bool)
@@ -325,6 +321,7 @@ class BoardWidget(QtWidgets.QLabel):
     """
 
     moveMade = QtCore.Signal(str)
+    movePushed = QtCore.Signal(str)
     checkmate = QtCore.Signal(bool)
     draw = QtCore.Signal()
     stalemate = QtCore.Signal()
@@ -646,17 +643,21 @@ class BoardWidget(QtWidgets.QLabel):
         """ Makes a move without move validation.
         The move, though, should be pseudo-legal. Otherwise `chess.Board.push(move)`
         will raise an exception. Can be useful when you don't need a promotion dialog
-        or notifications about the game state.
+        or notifications about the game state. Emits moveMade signal, with move's san as
+        parameter.
         """
 
         self._updateJustMovedCells(False)
+        san = self.board.san(move)
         self.board.push(move)
         self._updateJustMovedCells(True)
         self.synchronizeAndUpdateStyles()
+        self.moveMade.emit(san)
 
     def pushPiece(self, toSquare: chess.Square, w: CellWidget) -> None:
         """ Pushes the piece on the given cell widget to the given square.
         If there is a promotion a dialog will appear with 4 pieces to choose.
+        Emits moveMade and movePushed signals, with move's san as parameter.
         If the it is a draw/stalemate/checkmate the corresponding signal will be
         emit.
 
@@ -937,6 +938,7 @@ class BoardWidget(QtWidgets.QLabel):
             self.gameOver.emit()
 
         self.moveMade.emit(san)
+        self.movePushed.emit(san)
 
     def _setFlipped(self, flipped: bool):
         if self._flipped != flipped:

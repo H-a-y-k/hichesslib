@@ -4,13 +4,13 @@ import hichess
 setup(
   name = "hichesslib",
   packages = ["hichess"],
-  version = "1.2.2",
+  version = hichess.__version__,
   license="gpl-3.0+",
   description = hichess.__doc__.replace('\n', ' '),
-  author = "Haik Sargsian",
-  author_email = "haiksargsian6@gmail.com",
+  author = hichess.__author__,
+  author_email = hichess.__email__,
   url = "https://github.com/H-a-y-k/hichesslib",
-  download_url = "https://github.com/H-a-y-k/hichesslib/archive/1.2.2.tar.gz",
+  download_url = "https://github.com/H-a-y-k/hichesslib/archive/1.2.3.tar.gz",
   keywords = ["chess", "Qt", "PySide2", "GUI"],
   install_requires= [
           "python_chess",

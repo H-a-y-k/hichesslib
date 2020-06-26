@@ -17,7 +17,7 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 from context import hichess
 import chess
@@ -88,7 +88,9 @@ class CellWidgetTestCase(unittest.TestCase):
 
         self.cellWidget.setPiece(chess.Piece(chess.KING, chess.WHITE))
         self.assertFalse(self.cellWidget.isInCheck())
+
         self.cellWidget.setInCheck(True)
+
         self.assertTrue(self.cellWidget.isInCheck())
         self.cellWidget.setInCheck(False)
         self.assertFalse(self.cellWidget.isInCheck())
@@ -106,6 +108,7 @@ class CellWidgetTestCase(unittest.TestCase):
     def testSetHighlighted(self):
         self.assertFalse(self.cellWidget.isHighlighted())
         self.cellWidget.setHighlighted(True)
+
         self.assertTrue(self.cellWidget.isHighlighted())
         self.assertFalse(self.cellWidget.isCheckable())
 
@@ -131,14 +134,18 @@ class CellWidgetTestCase(unittest.TestCase):
     def testMarkedProperty(self):
         self.cellWidget = hichess.CellWidget()
 
+        mockDesignated = Mock()
+        self.cellWidget.designated.connect(mockDesignated)
+
         self.assertFalse(self.cellWidget.isMarked())
         self.cellWidget.mark()
-        self.assertTrue(self.cellWidget.isMarked())
+        mockDesignated.assert_called_once_with(True)
+        mockDesignated.reset_mock()
 
-        self.cellWidget.mark()
         self.assertTrue(self.cellWidget.isMarked())
 
         self.cellWidget.unmark()
+        mockDesignated.assert_called_once_with(False)
         self.assertFalse(self.cellWidget.isMarked())
 
     @patch("hichess.hichess.CellWidget.setMarked")
@@ -404,8 +411,13 @@ class BoardWidgetTestCase(unittest.TestCase):
                 game = chess.pgn.read_game(pgn)
                 self.boardWidget = hichess.BoardWidget(fen=game.board().fen(),
                                                        flipped=False, sides=hichess.NO_SIDE)
+                mockMoveMade = Mock()
+                self.boardWidget.moveMade.connect(mockMoveMade)
+
                 for move in game.mainline_moves():
+                    san = self.boardWidget.board.san(move)
                     self.boardWidget.makeMove(move)
+                    mockMoveMade.assert_called_with(san)
                     w = self.boardWidget.cellWidgetAtSquare(move.to_square)
 
                     self.assertTrue(w.isPiece())
@@ -413,6 +425,7 @@ class BoardWidgetTestCase(unittest.TestCase):
                     pieceType = chess.PIECE_TYPES[chess.PIECE_NAMES.index(pieceName) - 1]
                     self.assertEqual(self.boardWidget.board.piece_at(self.boardWidget.squareOf(w)),
                                      chess.Piece(pieceType, colorName == 'white'))
+                self.assertEqual(mockMoveMade.call_count, len(self.boardWidget.board.move_stack))
 
     def testPush(self):
         for gameName in os.listdir("games"):
@@ -420,8 +433,29 @@ class BoardWidgetTestCase(unittest.TestCase):
                 game = chess.pgn.read_game(pgn)
                 self.boardWidget = hichess.BoardWidget(fen=game.board().fen(),
                                                        flipped=False, sides=hichess.NO_SIDE)
+                mockMoveMade = Mock()
+                mockMovePushed = Mock()
+                mockCheckmate = Mock()
+                mockStalemate = Mock()
+                mockGameOver = Mock()
+
+                checkmateCount = 0
+                stalemateCount = 0
+
+                self.boardWidget.moveMade.connect(mockMoveMade)
+                self.boardWidget.movePushed.connect(mockMovePushed)
+                self.boardWidget.checkmate.connect(mockCheckmate)
+                self.boardWidget.stalemate.connect(mockStalemate)
+                self.boardWidget.gameOver.connect(mockGameOver)
+
                 for move in game.mainline_moves():
+                    san = self.boardWidget.board.san(move)
                     self.boardWidget.push(move)
+                    checkmateCount += self.boardWidget.board.is_checkmate()
+                    stalemateCount += self.boardWidget.board.is_stalemate()
+
+                    mockMoveMade.assert_called_with(san)
+                    mockMovePushed.assert_called_with(san)
                     w = self.boardWidget.cellWidgetAtSquare(move.to_square)
 
                     self.assertTrue(w.isPiece())
@@ -429,6 +463,11 @@ class BoardWidgetTestCase(unittest.TestCase):
                     pieceType = chess.PIECE_TYPES[chess.PIECE_NAMES.index(pieceName) - 1]
                     self.assertEqual(self.boardWidget.board.piece_at(self.boardWidget.squareOf(w)),
                                      chess.Piece(pieceType, colorName == 'white'))
+                self.assertEqual(mockMoveMade.call_count, len(self.boardWidget.board.move_stack))
+                self.assertEqual(mockMovePushed.call_count, len(self.boardWidget.board.move_stack))
+                self.assertEqual(mockCheckmate.call_count, checkmateCount)
+                self.assertEqual(mockStalemate.call_count, stalemateCount)
+                self.assertEqual(mockGameOver.call_count, checkmateCount + stalemateCount)
 
     def testPushForRaises(self):
         boardWidget = hichess.BoardWidget()
