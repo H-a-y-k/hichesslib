@@ -14,4 +14,4 @@ install:
 
 script:
   - cd test
-  - py test_hichess.py
+  - python3 test_hichess.py
