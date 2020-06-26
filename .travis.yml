@@ -9,8 +9,9 @@ cache:
     - test/games
 
 install:
-  - pip3 install -r requirements.txt
+  - pip install --upgrade pip wheel
   - pip3 install --upgrade setuptools
+  - pip3 install -r requirements.txt
   - pip3 install --upgrade coveralls
 
 script:
