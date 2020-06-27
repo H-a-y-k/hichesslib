@@ -41,7 +41,7 @@ To start using the library you need to create a PySide2 application. The library
   * Notifies about the game status (draw/stalemate/checkmate).
 
 ### Examples
-Minimal examples will be provided in the future.
+See [examples file](https://github.com/H-a-y-k/hichesslib/tree/master/examples).
 
 # Tests
 The library is tested with the [unittest](https://docs.python.org/3/library/unittest.html) framework.
