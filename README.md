@@ -44,7 +44,7 @@ To start using the library you need to create a PySide2 application. The library
   * In order to make the library customizable with QSS, after each property change of CellWidget, the methods [unpolish](https://doc.qt.io/qt-5/qstyle.html#unpolish) and [polish](https://doc.qt.io/qt-5/qstyle.html#polish) are being called, which significantly slows down the library.
 
 ### Examples
-See [examples file](https://github.com/H-a-y-k/hichesslib/tree/master/examples).
+See [examples folder](https://github.com/H-a-y-k/hichesslib/tree/master/examples).
 
 # Status
 The library has been tested only in windows10 and windows7 (new tests for windows7 will be conducted in the future).
