@@ -1,5 +1,5 @@
 # hichesslib
-[![PyPI version fury.io](https://badge.fury.io/py/ansicolortags.svg)](https://pypi.org/project/hichesslib/) [![Build Status](https://travis-ci.com/H-a-y-k/hichesslib.svg?branch=master)](https://travis-ci.com/H-a-y-k/hichesslib)
+[![PyPI version fury.io](https://badge.fury.io/py/ansicolortags.svg)](https://pypi.org/project/hichesslib/) [![Build Status](https://travis-ci.com/H-a-y-k/hichesslib.svg?branch=master)](https://travis-ci.com/H-a-y-k/hichesslib) [![Coverage Status](https://coveralls.io/repos/github/H-a-y-k/hichesslib/badge.svg?branch=master)](https://coveralls.io/github/H-a-y-k/hichesslib?branch=master)
 
 ## Description
 hichesslib is a cross-platform Python GUI chess library based on [python-chess](https://pypi.org/project/python-chess/) and [PySide2](https://pypi.org/project/PySide2/).
