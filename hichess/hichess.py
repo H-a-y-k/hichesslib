@@ -56,6 +56,7 @@ class CellWidget(QtWidgets.QPushButton):
         self._isMarked = False
         self._justMoved = False
 
+        self.setMouseTracking(True)
         self.setObjectName("cell_plain")
         self.setCheckable(False)
 
@@ -281,6 +282,20 @@ class _PromotionDialog(QtWidgets.QDialog):
         self.accept()
 
 
+class DragWidget(QtWidgets.QLabel):
+    def __init__(self, parent=None):
+        super(DragWidget, self).__init__(parent)
+
+    def mousePressEvent(self, e):
+        e.ignore()
+
+    def mouseReleaseEvent(self, e):
+        e.ignore()
+
+    def mouseMoveEvent(self, e):
+        e.ignore()
+
+
 class BoardWidget(QtWidgets.QLabel):
     """ This class represents a customizable graphical chess board.
     It inherits `QtWidgets.QLabel` and has a `QtWidgets.QGridLayout` with 64
@@ -372,16 +387,17 @@ class BoardWidget(QtWidgets.QLabel):
 
         self.setFen(self.board.fen())
 
+        self.setMouseTracking(True)
         self.setAutoFillBackground(True)
         self.setScaledContents(True)
 
     def eventFilter(self, watched, event: QMouseEvent) -> bool:
         if isinstance(watched, CellWidget):
             if event.type() == QtCore.QEvent.MouseButtonPress:
-                if event.button() == QtCore.Qt.LeftButton:
+                if event.buttons() == QtCore.Qt.LeftButton:
                     # start drag if it is possible
-                    if self.dragAndDrop and self.accessibleSides != NO_SIDE:
-                        self._dragWidget = QtWidgets.QLabel(self)
+                    if self.dragAndDrop and watched.getPiece() and watched.getPiece().color == self.board.turn:
+                        self._dragWidget = DragWidget(self)
                         self._dragWidget.setAutoFillBackground(True)
                         self._dragWidget.setFixedSize(watched.size())
                         self._dragWidget.setScaledContents(True)
@@ -394,35 +410,39 @@ class BoardWidget(QtWidgets.QLabel):
 
                         watched.setChecked(not watched.isChecked())
 
-                elif event.button() == QtCore.Qt.RightButton:
+                elif event.buttons() == QtCore.Qt.RightButton:
                     # mark cell if it is possible
                     if self.accessibleSides != NO_SIDE:
                         watched.setMarked(not watched.marked)
 
-            elif event.type() == QtCore.QEvent.MouseButtonRelease:
-                # end drag if it has started
-                if event.button() == QtCore.Qt.LeftButton:
-                    if self._dragWidget:
-                        self._dragWidget.deleteLater()
-                        self._dragWidget = None
-
-                        for w in self.cellWidgets(lambda w: w.geometry().contains(self.mapFromGlobal(event.globalPos()))):
-                            self._onCellWidgetClicked(w)
-                            return True
-
         return watched.event(event)
 
+    def mousePressEvent(self, e):
+        if e.buttons() != QtCore.Qt.LeftButton and self._dragWidget:
+            self._dragWidget.deleteLater()
+            self._dragWidget = None
+            self.foreachCells(CellWidget.unhighlight, CellWidget.unmark, lambda w: w.setChecked(False))
+
     def mouseMoveEvent(self, e):
-        if e.buttons() == QtCore.Qt.LeftButton:
-            if self._dragWidget:
-                # if drag has started, show the drag widget if it is not visible
-                # and move its center to the mouse cursor.
-                if not self._dragWidget.isVisible():
-                    self._dragWidget.show()
-                rect = self._dragWidget.geometry()
-                rect.moveCenter(e.pos())
-                self._dragWidget.setGeometry(rect)
+        if self._dragWidget:
+            # if drag has started, show the drag widget if it is not visible
+            # and move its center to the mouse cursor.
+            if not self._dragWidget.isVisible():
+                self._dragWidget.show()
+            rect = self._dragWidget.geometry()
+            rect.moveCenter(e.pos())
+            self._dragWidget.setGeometry(rect)
         super(BoardWidget, self).mouseMoveEvent(e)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == QtCore.Qt.LeftButton:
+            # end drag and drop
+            if self._dragWidget:
+                self._dragWidget.deleteLater()
+                self._dragWidget = None
+
+                for w in self.cellWidgets(lambda w: w.geometry().contains(self.mapFromGlobal(event.globalPos()))):
+                    self._onCellWidgetClicked(w)
 
     def cellWidgets(self, predicate: Callable[[CellWidget], bool] = lambda w: True) -> Generator[CellWidget, None, None]:
         """ Yields all the cell widgets in the board's layout
