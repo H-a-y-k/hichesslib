@@ -2,7 +2,7 @@
 [![PyPI version fury.io](https://badge.fury.io/py/ansicolortags.svg)](https://pypi.org/project/hichesslib/) [![Build Status](https://travis-ci.com/H-a-y-k/hichesslib.svg?branch=master)](https://travis-ci.com/H-a-y-k/hichesslib)
 
 ## Description
-hichesslib is a Python GUI chess library based on [python-chess](https://pypi.org/project/python-chess/) and [PySide2](https://pypi.org/project/PySide2/).
+hichesslib is a cross-platform Python GUI chess library based on [python-chess](https://pypi.org/project/python-chess/) and [PySide2](https://pypi.org/project/PySide2/).
 The library comes with a board widget that supports the chess rules and provides a set of interactions with the cells of the board and with the board itself including drag and drop, cell marking, piece movement, board flipping and more.
 
 ## Dependencies
@@ -42,6 +42,10 @@ To start using the library you need to create a PySide2 application. The library
 
 ### Examples
 See [examples file](https://github.com/H-a-y-k/hichesslib/tree/master/examples).
+
+# Status
+The library has been tested only in windows10 and windows7 (new tests for windows7 will be conducted in the future).
+It will be tested in other platforms too, but presumably, it will work fine on linux and osx too.
 
 # Tests
 The library is tested with the [unittest](https://docs.python.org/3/library/unittest.html) framework.
