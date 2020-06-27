@@ -25,9 +25,11 @@ install:
   - python3 -m pip install --upgrade setuptools
   - python3 -m pip install -r requirements.txt
   - python3 -m pip install --upgrade coveralls
-
+ 
 script:
   - cd test
   - coverage erase
   - coverage run --source hichess test_hichess.py -vv CellWidgetTestCase
   - coverage run --source hichess test_hichess.py -vv BoardWidgetTestCase
+  - echo Unit tests done
+  - coveralls || [[ $? -eq 139 ]]
