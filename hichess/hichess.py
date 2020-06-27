@@ -799,6 +799,7 @@ class BoardWidget(QtWidgets.QLabel):
     @accessibleSides.setter
     def accessibleSides(self, accessibleSides: AccessibleSides) -> None:
         self._accessibleSides = accessibleSides
+        self.foreachCells(CellWidget.unhighlight, CellWidget.unmark, lambda w: w.setChecked(False))
         self.synchronize()
 
     @QtCore.Slot()
@@ -874,6 +875,7 @@ class BoardWidget(QtWidgets.QLabel):
 
     def _synchronize(self) -> None:
         def callback(w):
+            w.unhighlight()
             if not w.isPlain():
                 w.toPlain()
 
