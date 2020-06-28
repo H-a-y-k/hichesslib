@@ -17,7 +17,7 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 """
-Python chess GUI library based on PySide2 and python_chess.
+Cross-platform Python chess GUI library based on PySide2 and python_chess.
 """
 
 from hichess.hichess import *
