@@ -4,7 +4,7 @@ from PySide2.QtCore import QFile, QTextStream
 from PySide2.QtGui import QPixmap
 import sys
 
-import resources
+from context import resources
 
 
 class MainWindow(QMainWindow):
