@@ -40,6 +40,9 @@ To start using the library you need to create a PySide2 application. The library
   * Interactions can be limited to only one side or for all sides (the latter is for read only boards).
   * Notifies about the game status (draw/stalemate/checkmate).
 
+### Documentation
+The the documentation is located in [docs](https://github.com/H-a-y-k/hichesslib/tree/master/docs).
+
 ### Problems and limitations
   * In order to make the library customizable with QSS, after each property change of CellWidget, the methods [unpolish](https://doc.qt.io/qt-5/qstyle.html#unpolish) and [polish](https://doc.qt.io/qt-5/qstyle.html#polish) are being called, which significantly slows down the library.
 
@@ -47,8 +50,7 @@ To start using the library you need to create a PySide2 application. The library
 See [examples folder](https://github.com/H-a-y-k/hichesslib/tree/master/examples).
 
 # Status
-The library has been tested only in windows10 and windows7 (new tests for windows7 will be conducted in the future).
-It will be tested in other platforms too, but presumably, it will work fine on linux and osx as well.
+The library has been tested on Windows7, Windows10, Fedora 31.
 
 # Tests
 The library is tested with the [unittest](https://docs.python.org/3/library/unittest.html) framework.

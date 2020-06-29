@@ -632,7 +632,3 @@ Calls `CellWidget.unmark` for each cell.
 ```
 
 A convenience method that sets the property `flipped` to True.
-<<<<<<< HEAD
-=======
-
->>>>>>> 10b80304c65b9623a9a9ff21b12d92a79eaea8ef
