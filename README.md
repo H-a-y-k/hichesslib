@@ -31,7 +31,7 @@ To start using the library you need to create a PySide2 application. The library
   * Can be marked. Marked cell widgets are easily customizable.
   * Can be highlighted for displaying the legal moves on the board.
 
-### BoardWidget
+#### BoardWidget
   * BoardWidget supports all the chess rules.
   * Is easily customizable.
   * Supports rotation.
