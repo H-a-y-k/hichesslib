@@ -45,6 +45,7 @@ class CellWidget(QtWidgets.QPushButton):
     """
 
     designated = QtCore.Signal(bool)
+    """ Indicates that the setter of `marked` property has been called. """
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
@@ -109,12 +110,13 @@ class CellWidget(QtWidgets.QPushButton):
     @staticmethod
     def makePiece(piece: chess.Piece) -> "CellWidget":
         """ A static method that creates a `CellWidget` from the given piece.
-            Parameters
-            ----------
-            piece : chess.Piece
-                The piece that will occupy the cell. Note that the type of
-                the piece cannot be NoneType as in the definition of the
-                method `setPiece`, because by default cells are created empty.
+
+        Parameters
+        ----------
+        piece : chess.Piece
+            The piece that will occupy the cell. Note that the type of
+            the piece cannot be NoneType as in the definition of the
+            method `setPiece`, because by default cells are created empty.
          """
 
         assert isinstance(piece, chess.Piece)
