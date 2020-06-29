@@ -47,8 +47,7 @@ To start using the library you need to create a PySide2 application. The library
 See [examples folder](https://github.com/H-a-y-k/hichesslib/tree/master/examples).
 
 # Status
-The library has been tested only in windows10 and windows7 (new tests for windows7 will be conducted in the future).
-It will be tested in other platforms too, but presumably, it will work fine on linux and osx as well.
+The library has been tested on Windows7, Windows10, Fedora 31.
 
 # Tests
 The library is tested with the [unittest](https://docs.python.org/3/library/unittest.html) framework.
