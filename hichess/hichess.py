@@ -25,7 +25,10 @@ from typing import Optional, Mapping, Generator, Callable, Any, Deque
 import PySide2.QtCore as QtCore
 import PySide2.QtWidgets as QtWidgets
 import chess
+import chess.engine
 from PySide2.QtGui import QPixmap, QMouseEvent, QCursor
+
+import asyncio
 
 
 class NotAKingError(Exception):
@@ -239,6 +242,41 @@ ONLY_BLACK_SIDE = AccessibleSides.ONLY_BLACK
 BOTH_SIDES = AccessibleSides.BOTH
 
 
+class _Engine:
+    def __init__(self):
+        self.engine: Optional[chess.engine.UciProtocol] = None
+
+    def null(self) -> bool:
+        return self.engine is None
+
+    def start(self, path, options={}) -> bool:
+        if not self.null():
+            logging.warning("Cannot start a new engine, as there is another running.")
+            return False
+
+        async def main():
+            transport, self.engine = await chess.engine.popen_uci(path)
+            logging.info(f"Engine at {path} successfully started.")
+
+            await self.engine.configure(options)
+
+        asyncio.get_event_loop().run_until_complete(main())
+        return True
+
+    def playMove(self, board, limit, ponder):
+        return asyncio.get_event_loop().run_until_complete(self.engine.play(board=board, limit=limit, ponder=ponder))
+
+    def quit(self) -> bool:
+        if self.null():
+            logging.warning("No engine is running.")
+            return False
+
+        asyncio.get_event_loop().run_until_complete(self.engine.quit())
+        self.engine = None
+
+        return True
+
+
 class _PromotionDialog(QtWidgets.QDialog):
     OptionOrder = bool
     QUEEN_ON_BOTTOM, QUEEN_ON_TOP = [True, False]
@@ -255,7 +293,7 @@ class _PromotionDialog(QtWidgets.QDialog):
             w = CellWidget.makePiece(chess.Piece(pieceType, color))
             w.setFocusPolicy(QtCore.Qt.NoFocus)
             w.setSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding,
-                QtWidgets.QSizePolicy.MinimumExpanding)
+                            QtWidgets.QSizePolicy.MinimumExpanding)
             w.clicked.connect(partial(self.onPieceChosen, pieceType))
             return w
 
@@ -277,22 +315,19 @@ class _PromotionDialog(QtWidgets.QDialog):
         self.accept()
 
 
-def _DefaultPredicate(w: CellWidget) -> bool:
-    return True
-
-
 class _DragWidget(QtWidgets.QLabel):
     def __init__(self, parent=None):
         super(_DragWidget, self).__init__(parent)
 
-    def mousePressEvent(self, e):
-        e.ignore()
+    def event(self, e: QtCore.QEvent) -> bool:
+        if e.type() == QMouseEvent:
+            e.ignore()
+            return False
+        return super(_DragWidget, self).event(e)
 
-    def mouseReleaseEvent(self, e):
-        e.ignore()
 
-    def mouseMoveEvent(self, e):
-        e.ignore()
+def _DefaultPredicate(w: CellWidget) -> bool:
+    return True
 
 
 class BoardWidget(QtWidgets.QLabel):
@@ -375,7 +410,9 @@ class BoardWidget(QtWidgets.QLabel):
         self.lastCheckedCellWidget = None
 
         self.dragAndDrop = dnd
-        self._dragWidget = None
+        self._dragWidget: Optional[QtWidgets.QWidget] = None
+
+        self.engine = _Engine()
 
         self._boardLayout = QtWidgets.QGridLayout()
         self._boardLayout.setContentsMargins(0, 0, 0, 0)

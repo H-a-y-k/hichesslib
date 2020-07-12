@@ -10,7 +10,7 @@ setup(
   author = hichess.__author__,
   author_email = hichess.__email__,
   url = "https://github.com/H-a-y-k/hichesslib",
-  download_url = "https://github.com/H-a-y-k/hichesslib/archive/v1.2.4.tar.gz",
+  download_url = "https://github.com/H-a-y-k/hichesslib/archive/v1.2.9.tar.gz",
   keywords = ["chess", "Qt", "PySide2", "GUI"],
   install_requires= [
           "python_chess",
