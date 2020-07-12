@@ -282,10 +282,10 @@ class EngineWrapper:
             return False
 
         async def main():
-            transport, self.engineWrapper = await chess.engine.popen_uci(path)
+            transport, self.engine = await chess.engine.popen_uci(path)
             logging.info(f"Engine at {path} successfully started.")
 
-            await self.engineWrapper.configure(options)
+            await self.engine.configure(options)
 
         asyncio.get_event_loop().run_until_complete(main())
         return True
