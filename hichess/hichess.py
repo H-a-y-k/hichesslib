@@ -20,13 +20,14 @@ import logging
 from collections import deque
 from enum import Enum
 from functools import partial
-from typing import Optional, Mapping, Generator, Callable, Any, Deque
+from typing import Optional, Mapping, Generator, Callable, Any, Deque, Coroutine
 
 import PySide2.QtCore as QtCore
 import PySide2.QtWidgets as QtWidgets
+import PySide2.QtGui as QtGui
+
 import chess
 import chess.engine
-from PySide2.QtGui import QPixmap, QMouseEvent, QCursor
 
 import asyncio
 
@@ -116,7 +117,7 @@ class CellWidget(QtWidgets.QPushButton):
 
         Parameters
         ----------
-        piece : chess.Piece
+        piece : `chess.Piece`
             The piece that will occupy the cell. Note that the type of
             the piece cannot be NoneType as in the definition of the
             method `setPiece`, because by default cells are created empty.
@@ -137,7 +138,7 @@ class CellWidget(QtWidgets.QPushButton):
 
         Raises
         -------
-        NotAKingError
+        `NotAKingError`
             It is raised when the property is set to True for
             a cell not being occupied by a king.
         """
@@ -242,31 +243,70 @@ ONLY_BLACK_SIDE = AccessibleSides.ONLY_BLACK
 BOTH_SIDES = AccessibleSides.BOTH
 
 
-class _Engine:
+class EngineWrapper:
+    """ This class is a wrapper around `engine`.
+    The class is used to ease interactions with the engine and simplifies debugging.
+    An `EngineWrapper` with no engine is called a null `EngineWrapper`.
+
+    Attributes
+    ----------
+    engine : Optional[`chess.engine.UciProtocol`]
+        Represents the engine. By default there is no engine, thus, the engine is None.
+    """
+
     def __init__(self):
         self.engine: Optional[chess.engine.UciProtocol] = None
 
     def null(self) -> bool:
+        """ Identifies if the wrapper has an engine. """
         return self.engine is None
 
-    def start(self, path, options={}) -> bool:
+    def start(self, path: str, options: dict = {}) -> bool:
+        """ Starts an engine on the given path and configures it with the given options.
+
+        Warnings
+        --------
+        Before starting a new engine, quit the current one.
+        It is not possible to start an engine when there is another running, in other words, when
+        the wrapper is not null. The caller will be warned about it if  this function is called when
+        the wrapper is not null. The caller will also be informed if the engine was successfully
+        started.
+
+        Returns
+        -------
+        bool
+            Returns True if the engine was started successfully, and False if not.
+        """
         if not self.null():
             logging.warning("Cannot start a new engine, as there is another running.")
             return False
 
         async def main():
-            transport, self.engine = await chess.engine.popen_uci(path)
+            transport, self.engineWrapper = await chess.engine.popen_uci(path)
             logging.info(f"Engine at {path} successfully started.")
 
-            await self.engine.configure(options)
+            await self.engineWrapper.configure(options)
 
         asyncio.get_event_loop().run_until_complete(main())
         return True
 
-    def playMove(self, board, limit, ponder):
+    def playMove(self, board: chess.Board, limit: chess.engine.Limit, ponder: bool) -> Coroutine[Any, Any, chess.engine.PlayResult]:
+        """ Finds the best move on the `board`. Returns a coroutine. """
         return asyncio.get_event_loop().run_until_complete(self.engine.play(board=board, limit=limit, ponder=ponder))
 
     def quit(self) -> bool:
+        """ Quits the curent running engine.
+
+        Warnings
+        --------
+        This function should be called when there is a running engine. Otherwise the caller will be warned
+        about it.
+
+        Returns
+        -------
+        True if the engine was quit successfully and False if not.
+        """
+
         if self.null():
             logging.warning("No engine is running.")
             return False
@@ -320,7 +360,7 @@ class _DragWidget(QtWidgets.QLabel):
         super(_DragWidget, self).__init__(parent)
 
     def event(self, e: QtCore.QEvent) -> bool:
-        if e.type() == QMouseEvent:
+        if e.type() == QtGui.QMouseEvent:
             e.ignore()
             return False
         return super(_DragWidget, self).event(e)
@@ -334,15 +374,15 @@ class BoardWidget(QtWidgets.QLabel):
     """ Represents a customizable graphical chess board.
     It inherits `QtWidgets.QLabel` and has a `QtWidgets.QGridLayout` with 64
     `CellWidget` instances that can be moved. It also supports all the
-    chess rules and allows drag and drop.
+    chess rules, drag and drop and chess engines.
 
     Attributes
     ----------
-    board : chess.Board
+    board : `chess.Board`
         Represents the actual board. Moves and their validation are
         conducted through this object.
 
-    popStack : Deque[chess.Move]
+    popStack : Deque[`chess.Move`]
         The moves that are popped from the `board.move_stack` through the functions
         `goToMove`, `pop` are stored in this deque.
 
@@ -350,13 +390,13 @@ class BoardWidget(QtWidgets.QLabel):
         If this attribute is True, the board can't be interacted with unless `popStack`
         is empty.
 
-    defaultPixmap : QPixmap
+    defaultPixmap : `QtGui.QPixmap`
         The pixmap that the board will have when the property `flipped` is False.
 
-    flippedPixmap : QPixmap
+    flippedPixmap : `QtGui.QPixmap`
         The pixmap that the board will have when the property `flipped` is True.
 
-    lastCheckedCellWidget : Optional[CellWidget]
+    lastCheckedCellWidget : Optional[`CellWidget`]
         Holds the last CellWidget that was checked through
         `QtWidgets.QPushButton.setChecked(True)`.
         Its value is None in case no CellWidget has been checked.
@@ -368,6 +408,9 @@ class BoardWidget(QtWidgets.QLabel):
         can be dropped by releasing the mouse left button during the drag. Whereever
         the cell is dropped, the board acts as if the same point were clicked with
         the mouse.
+
+    engineWrapper : `EngineWrapper`
+        This attribute is used to start an engine and find the best moves on the board.
     """
 
     moveMade = QtCore.Signal(str)
@@ -406,13 +449,13 @@ class BoardWidget(QtWidgets.QLabel):
         self.blockBoardOnPop = False
 
         self.defaultPixmap = self.pixmap()
-        self.flippedPixmap = QPixmap(self.pixmap())
+        self.flippedPixmap = QtGui.QPixmap(self.pixmap())
         self.lastCheckedCellWidget = None
 
         self.dragAndDrop = dnd
         self._dragWidget: Optional[QtWidgets.QWidget] = None
 
-        self.engine = _Engine()
+        self.engineWrapper = EngineWrapper()
 
         self._boardLayout = QtWidgets.QGridLayout()
         self._boardLayout.setContentsMargins(0, 0, 0, 0)
@@ -442,7 +485,7 @@ class BoardWidget(QtWidgets.QLabel):
         self.setAutoFillBackground(True)
         self.setScaledContents(True)
 
-    def eventFilter(self, watched, event: QMouseEvent) -> bool:
+    def eventFilter(self, watched, event: QtGui.QMouseEvent) -> bool:
         if isinstance(watched, CellWidget):
             if event.type() == QtCore.QEvent.MouseButtonPress:
                 if event.buttons() == QtCore.Qt.LeftButton:
@@ -454,11 +497,11 @@ class BoardWidget(QtWidgets.QLabel):
                         self._dragWidget.setFixedSize(watched.size())
                         self._dragWidget.setScaledContents(True)
                         self._dragWidget.setStyleSheet("background: transparent;")
-                        self._dragWidget.setPixmap(QPixmap(
+                        self._dragWidget.setPixmap(QtGui.QPixmap(
                             f":/images/{'_'.join(watched.objectName().split('_')[1:])}.png"))
 
                         rect = self._dragWidget.geometry()
-                        rect.moveCenter(QCursor.pos())
+                        rect.moveCenter(QtGui.QCursor.pos())
                         self._dragWidget.setGeometry(rect)
 
                         watched.setChecked(not watched.isChecked())
@@ -504,7 +547,7 @@ class BoardWidget(QtWidgets.QLabel):
         """
         Yields
         ------
-        Generator[CellWidget, None, None]
+        Generator[`CellWidget`, None, None]
             All the cell widgets in the board's layout
             that fulfill the predicate's condition.
         """
@@ -521,9 +564,9 @@ class BoardWidget(QtWidgets.QLabel):
 
         Parameters
         ----------
-        *args : Callable[[CellWidget], Any]
+        *args : Callable[[`CellWidget`], Any]
             The callbacks that will be called on the cell widgets.
-        predicate : Callable[[CellWidget], bool]
+        predicate : Callable[[`CellWidget`], bool]
         """
 
         for w in self.cellWidgets():
@@ -535,7 +578,7 @@ class BoardWidget(QtWidgets.QLabel):
         """
         Returns
         -------
-        Optional[chess.Square]
+        Optional[`chess.Square`]
             The index of the widget at the given square number if we started counting from the top left
             corner of the board.
         """
@@ -561,7 +604,7 @@ class BoardWidget(QtWidgets.QLabel):
         """
         Returns
         -------
-        Optional[CellWidget]
+        Optional[`CellWidget`]
             The cell widget at the given square if there is one, otherwise
             it returns None.
         """
@@ -602,7 +645,7 @@ class BoardWidget(QtWidgets.QLabel):
         """
         Returns
         -------
-        Optional[CellWidget]
+        Optional[`CellWidget`]
             The cell widget that holds the king of the given color or None if there is no
             king.
         """
@@ -828,7 +871,7 @@ class BoardWidget(QtWidgets.QLabel):
 
         return lastMove.uci()
 
-    def goToMove(self, id: int) -> bool:
+    def goToMove(self, n: int) -> bool:
         """ Goes to the move with the given `id`.
 
         Returns
@@ -837,14 +880,14 @@ class BoardWidget(QtWidgets.QLabel):
             True if a move with the given `id` exists. Otherwise returns False.
         """
 
-        if id >= 0:
+        if n >= 0:
             moveStackLen = len(self.board.move_stack)
-            if id <= (moveStackLen + len(self.popStack)):
-                if moveStackLen < id:
-                    self.unpop(id - moveStackLen)
+            if n <= (moveStackLen + len(self.popStack)):
+                if moveStackLen < n:
+                    self.unpop(n - moveStackLen)
                     return True
-                if moveStackLen > id:
-                    self.pop(moveStackLen - id)
+                if moveStackLen > n:
+                    self.pop(moveStackLen - n)
                     return True
         return False
 
