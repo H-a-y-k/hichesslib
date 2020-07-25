@@ -29,7 +29,7 @@ To start using the library you need to create a PySide2 application. The library
 #### CellWidget
   * CellWidget can contain any chess piece.
   * Can be marked. Marked cell widgets are easily customizable.
-  * Can be highlighted for displaying the legal moves on the board.
+  * Can be highlighted to display the legal moves on the board.
 
 #### BoardWidget
   * BoardWidget supports all the chess rules.
@@ -49,12 +49,12 @@ The the documentation is located in [docs](https://github.com/H-a-y-k/hichesslib
 ### Examples
 See [examples folder](https://github.com/H-a-y-k/hichesslib/tree/master/examples).
 
-# Status
+## Status
 The library has been tested on Windows7, Windows10, Fedora 31.
 
-# Tests
+## Tests
 Unittests are done with the [unittest](https://docs.python.org/3/library/unittest.html) framework.
 Tests are located in [hichesslib/test/](https://github.com/H-a-y-k/hichesslib/tree/master/test).
 
-# License
+## License
 hichesslib is licensed under GPLv3.0+ license. See [license](https://github.com/H-a-y-k/hichesslib/blob/master/LICENSE) file.
