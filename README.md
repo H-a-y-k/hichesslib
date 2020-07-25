@@ -44,7 +44,7 @@ To start using the library you need to create a PySide2 application. The library
 The the documentation is located in [docs](https://github.com/H-a-y-k/hichesslib/tree/master/docs).
 
 ### Problems and limitations
-  * In order to make the library customizable with QSS, after each property change of CellWidget, the methods [unpolish](https://doc.qt.io/qt-5/qstyle.html#unpolish) and [polish](https://doc.qt.io/qt-5/qstyle.html#polish) are being called, which significantly slows down the interactions with CellWidget.
+  * In order to make CellWidget graphically customizable, after each property change, the methods [unpolish](https://doc.qt.io/qt-5/qstyle.html#unpolish) and [polish](https://doc.qt.io/qt-5/qstyle.html#polish) are called, which significantly slows down the interactions with CellWidget.
 
 ### Examples
 See [examples folder](https://github.com/H-a-y-k/hichesslib/tree/master/examples).
