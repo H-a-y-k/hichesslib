@@ -147,8 +147,6 @@ public:
 
     void set_board_fen(const std::string &fen)
     {
-        // this function does not control if the position is legal
-
         board_fen = fen;
 
         if (board_fen.empty())
@@ -160,15 +158,8 @@ public:
         std::istringstream split(board_fen);
         std::vector<std::string> rows;
 
-        std::string row;
-        for (int count = 0; std::getline(split, row, '/'); count++)
-        {
-            if (row.size() != 8)
-                throw std::invalid_argument("The " +
-                                            std::string(1, _ranknames[count]) +
-                                            "th row in the fen ");
+        for (std::string row; std::getline(split, row, '/');)
             rows.push_back(row);
-        }
 
         if (rows.empty())
             throw std::invalid_argument("rows aren't separated with slashes('/') in the fen: " + board_fen);
@@ -176,7 +167,6 @@ public:
             throw std::invalid_argument("the fen has to contain 8 rows and not" + std::to_string(rows.size()) + ": " + board_fen);
 
         clear();
-
 
         std::array<std::array<uint64_t, 6>, 2> tmp_bb_board {};
 
@@ -207,7 +197,7 @@ public:
                     if (found != _piecesymbols.end())
                     {
                         int rank = std::distance(row_it, rows.rbegin());
-                        int file = std::distance(symbol_it, row.begin());
+                        int file = std::distance(symbol_it, row_it->begin());
 
                         if (previous_was_digit)
                             file += *(symbol_it - 1) - '0';
@@ -220,8 +210,8 @@ public:
                         previous_was_digit = false;
                     }
                     else throw std::invalid_argument("invalid character(s)('" +
-                                                    std::string(1, *symbol_it) +
-                                                    "') in the fen: " + board_fen);
+                                                     std::string(1, *symbol_it) +
+                                                     "') in the fen: " + board_fen);
                 }
             }
 
