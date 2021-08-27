@@ -10,7 +10,6 @@ add_library(chessplusplus SHARED
   chessplusplus_global.h
   chessplusplus.cpp
   chessplusplus.h
-  constants.h
 )
 
 target_compile_definitions(chessplusplus PRIVATE CHESSPLUSPLUS_LIBRARY)
