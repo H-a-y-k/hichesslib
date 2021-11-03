@@ -6,10 +6,6 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_library(chessplusplus SHARED
-  chessplusplus_global.h
-  chessplusplus.cpp
-  chessplusplus.h
-)
-
-target_compile_definitions(chessplusplus PRIVATE CHESSPLUSPLUS_LIBRARY)
+add_subdirectory(include/chessplusplus)
+add_subdirectory(private)
+add_subdirectory(test)
