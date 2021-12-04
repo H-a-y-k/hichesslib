@@ -1,4 +1,5 @@
 #include "chessplusplus/chessplusplus.h"
+#include <iostream>
 
 using namespace chess;
 
@@ -71,6 +72,12 @@ bool Piece::operator==(const Piece &other) const
     return piece_type == other.piece_type && color == other.color;
 }
 
+bool Piece::operator!=(const Piece &other) const
+{
+    return piece_type != other.piece_type || color != other.color;
+}
+
+
 uint64_t chess::square_bb(Square square)
 {
     return uint64_t(1) << square;
@@ -83,6 +90,8 @@ Square chess::square_at(int rank, int file)
 
 Square chess::shift_square(Square square, def::directions direction, int step)
 {
+    // avoid changing rank/file. in this way you can loop easier
+
     switch(direction)
     {
     case def::up:
@@ -117,7 +126,7 @@ int chess::square_file(Square square)
     return square % 8;
 }
 
-uint64_t diagonals_at(Square square)
+uint64_t chess::diagonals_at(Square square)
 {
     uint64_t result = 0;
 
@@ -143,20 +152,26 @@ char def::piece_symbol(PieceType type)
     return def::piece_symbols[type];
 }
 
-const char* piece_name(PieceType type)
+const char* def::piece_name(PieceType type)
 {
     return def::piece_names[type];
 }
+
+
+Move::Move(Square from, Square to)
+    : from(from)
+    , to(to)
+{ }
 
 
 Board::Board(const std::string &fen)
 {
     if (fen.empty())
         clear();
-    else if (fen == def::starting_board_fen)
+    else if (fen == def::starting_fen)
         reset_board();
     else
-        set_board_fen(fen);
+        set_fen(fen);
 }
 
 void Board::reset_board()
@@ -164,18 +179,18 @@ void Board::reset_board()
     using namespace def;
 
     bb_board[white][pawn] = bb_ranks[1];
-    bb_board[white][knight] = square_bb(B1) & square_bb(G1);
-    bb_board[white][bishop] = square_bb(C1) & square_bb(F1);
-    bb_board[white][rook] = square_bb(A1) & square_bb(H1);
+    bb_board[white][knight] = square_bb(B1) | square_bb(G1);
+    bb_board[white][bishop] = square_bb(C1) | square_bb(F1);
+    bb_board[white][rook] = square_bb(A1) | square_bb(H1);
     bb_board[white][queen] = square_bb(D1);
-    bb_board[white][king] = square_bb(E1);
+    bb_board[white][def::king] = square_bb(E1);
 
-    bb_board[black][pawn] = bb_ranks[7];
-    bb_board[black][knight] = square_bb(B8) & square_bb(G8);
-    bb_board[black][bishop] = square_bb(C8) & square_bb(F8);
-    bb_board[black][rook] = square_bb(A8) & square_bb(H8);
+    bb_board[black][pawn] = bb_ranks[6];
+    bb_board[black][knight] = square_bb(B8) | square_bb(G8);
+    bb_board[black][bishop] = square_bb(C8) | square_bb(F8);
+    bb_board[black][rook] = square_bb(A8) | square_bb(H8);
     bb_board[black][queen] = square_bb(D8);
-    bb_board[black][king] = square_bb(E8);
+    bb_board[black][def::king] = square_bb(E8);
 }
 
 void Board::clear()
@@ -184,37 +199,39 @@ void Board::clear()
     bb_board[def::black] = {0,0,0,0,0,0};
 }
 
-void Board::set_board_fen(const std::string &board_fen)
+void Board::set_board_fen(const std::string &_board_fen)
 {
-    if (board_fen.empty())
+    if (_board_fen.empty())
         throw std::invalid_argument("fen is empty");
 
-    if (board_fen.find(' ') != std::string::npos)
-        throw std::invalid_argument(std::string("expected position part, got multiple parts: ") + board_fen);
+    if (_board_fen.find(' ') != std::string::npos)
+        throw std::invalid_argument(std::string("expected position part, got multiple parts: ") + _board_fen);
 
-    std::istringstream split(board_fen);
+    std::istringstream split(_board_fen);
     std::vector<std::string> rows;
 
-    for (std::string row; std::getline(split, row, '/');)
-        rows.push_back(row);
+    for (std::string row; std::getline(split, row, '/'); rows.push_back(row)) { }
 
     if (rows.empty())
-        throw std::invalid_argument("rows aren't separated with slashes('/') in the fen: " + board_fen);
+        throw std::invalid_argument("rows aren't separated with slashes('/') in the fen: " + _board_fen);
     else if (rows.size() != 8)
-        throw std::invalid_argument("the fen has to contain 8 rows and not" + std::to_string(rows.size()) + ": " + board_fen);
+        throw std::invalid_argument("the fen has to contain 8 rows and not" + std::to_string(rows.size()) + ": " + _board_fen);
 
     clear();
 
-    std::array<std::array<uint64_t, 6>, 2> tmp_bb_board {};
+    std::array<std::array<uint64_t, 6>, 2> tmp_bb_board {{{0,0,0,0,0,0},{0,0,0,0,0,0}}};
 
-    for (auto row_it = rows.rbegin(); row_it != rows.rend(); row_it++)
+    const auto crows = rows;
+
+    for (auto row_it = crows.crbegin(); row_it != crows.crend(); row_it++)
     {
         if (row_it->empty())
-            throw std::invalid_argument("rows in fen cannot be empty: " + board_fen);
+            throw std::invalid_argument("rows in fen cannot be empty: " + _board_fen);
 
         int empty_cells = 0;
         int occupied_cells = 0;
-        for (auto symbol_it = row_it->begin(); symbol_it < row_it->end(); symbol_it++)
+
+        for (auto symbol_it = row_it->cbegin(); symbol_it != row_it->cend(); symbol_it++)
         {
             bool previous_was_digit = false;
 
@@ -223,7 +240,7 @@ void Board::set_board_fen(const std::string &board_fen)
                 empty_cells += *symbol_it - '0';
 
                 if (previous_was_digit)
-                    throw std::invalid_argument("a row in the fen shouldn't contain two digits next to each other: " + board_fen);
+                    throw std::invalid_argument("a row in the fen shouldn't contain two digits next to each other: " + _board_fen);
 
                 previous_was_digit = true;
             }
@@ -233,40 +250,70 @@ void Board::set_board_fen(const std::string &board_fen)
                                        std::tolower(*symbol_it));
                 if (found != def::piece_symbols.end())
                 {
-                    int rank = std::distance(row_it, rows.rbegin());
-                    int file = std::distance(symbol_it, row_it->begin());
+                    int rank = std::abs(std::distance(row_it, rows.crbegin()))-1;
+                    int file = std::abs(std::distance(symbol_it, row_it->cbegin()));
 
                     if (previous_was_digit)
-                        file += *(symbol_it - 1) - '0';
+                        file += *(symbol_it-1) - '0';
 
                     Color color = std::islower(*symbol_it);
-                    PieceType piece = static_cast<PieceType>(std::distance(found, def::piece_symbols.begin()));
-
-                    tmp_bb_board[color][piece] |= square_at(rank, file);
-
+                    PieceType piece = static_cast<PieceType>(found - def::piece_symbols.cbegin());
+                    tmp_bb_board[color][piece] |= square_bb(square_at(rank, file));
+//                    std::cout << "(" << rank << ", " << file << ") ";
                     previous_was_digit = false;
+                    occupied_cells++;
                 }
                 else throw std::invalid_argument("invalid character(s)('" +
                                                  std::string(1, *symbol_it) +
-                                                 "') in the fen: " + board_fen);
+                                                 "') in the fen: " + _board_fen);
             }
         }
 
         if (empty_cells + occupied_cells != 8)
-            throw std::invalid_argument("a fen row has to occupy exactly 8 cells: " + board_fen);
+            throw std::invalid_argument("a fen row has to occupy exactly 8 cells: " + _board_fen);
     }
 
     bb_board = tmp_bb_board;
 }
 
-bool can_castle_kingside(Color side)
+void Board::set_fen(const std::string &fen)
 {
-    return true;
-}
+    std::istringstream split(fen);
+    std::string position;
+    std::string turn;
+    std::string _castling_rights;
+    std::string en_passant;
+    std::string halfmove_clock;
+    std::string fullmove_num;
+    std::string rest;
 
-bool can_castle_queenside(Color side)
-{
-    return false;
+    std::getline(split, position, ' ');
+    std::getline(split, turn, ' ');
+    std::getline(split, _castling_rights, ' ');
+    std::getline(split, en_passant, ' ');
+    std::getline(split, halfmove_clock, ' ');
+    std::getline(split, fullmove_num, ' ');
+    std::getline(split, rest, ' ');
+
+    if (!rest.empty())
+        throw std::invalid_argument("the fen contains more sections than expected: " + fen);
+
+    set_board_fen(position);
+    if (turn == "w")
+        turn = def::white;
+    else if (turn == "b")
+        turn = def::black;
+    else
+        throw std::invalid_argument("the color section in the fen should contain either w or b: " + fen);
+
+    if (_castling_rights == "-"
+        || _castling_rights == "K" || _castling_rights == "Q" || _castling_rights == "KQ"
+        || _castling_rights == "k" || castling_rights == "q" || castling_rights == "kq"
+        || _castling_rights == "KQkq")
+    {
+        castling_rights = _castling_rights;
+    }
+    else throw std::invalid_argument("the castling rights part of the fen is invalid: " + fen);
 }
 
 PieceType Board::piece_type_at(Square square)
@@ -274,12 +321,12 @@ PieceType Board::piece_type_at(Square square)
     for (auto piece_bb = bb_board[def::white].begin(); piece_bb != bb_board[def::white].end(); piece_bb++)
     {
         if (*piece_bb & square_bb(square))
-            return std::distance(piece_bb, bb_board[def::white].begin());
+            return std::abs(std::distance(piece_bb, bb_board[def::white].begin()));
     }
     for (auto piece_bb = bb_board[def::black].begin(); piece_bb != bb_board[def::black].end(); piece_bb++)
     {
         if (*piece_bb & square_bb(square))
-            return std::distance(piece_bb, bb_board[def::black].begin());
+            return std::abs(std::distance(piece_bb, bb_board[def::black].begin()));
     }
 
     return def::no_piece;
@@ -302,10 +349,53 @@ Color Board::color_at(Square square)
     return bb_board[def::white][piece_type_at(square)] & square_bb(square);
 }
 
-Move::Move(Square from, Square to)
-    : from(from)
-    , to(to)
-{ }
+Square Board::king(Color side)
+{
+    uint64_t bb_king = bb_board[side][def::king];
+    Square square_i = 0;
+    for (; bb_king != 1; bb_king >>= 2)
+        square_i++;
+
+    return square_i;
+}
+
+bool Board::can_castle_kingside(Color side)
+{
+    if (castling_rights.find(side ? "K" : "k") != std::string::npos)
+    {
+        if (side == def::white)
+            return (piece_type_at(def::E1) == def::king
+                    && piece_type_at(def::H1) == def::rook
+                    && square_is_empty(def::G1) && square_is_empty(def::H1));
+        else
+            return (piece_type_at(def::E8) == def::king
+                    && piece_type_at(def::H8) == def::rook
+                    && square_is_empty(def::G8) && square_is_empty(def::H8));
+    }
+
+    return false;
+}
+
+bool Board::can_castle_queenside(Color side)
+{
+    if (castling_rights.find(side ? "Q" : "q") != std::string::npos)
+    {
+        if (side == def::white)
+            return (piece_type_at(def::E1) == def::king
+                    && piece_type_at(def::A1) == def::rook
+                    && square_is_empty(def::B1)
+                    && square_is_empty(def::C1)
+                    && square_is_empty(def::D1));
+        else
+            return (piece_type_at(def::E8) == def::king
+                    && piece_type_at(def::A8) == def::rook
+                    && square_is_empty(def::B8)
+                    && square_is_empty(def::C8)
+                    && square_is_empty(def::D8));
+    }
+
+    return false;
+}
 
 bool Board::square_is_empty(Square square)
 {
@@ -320,13 +410,8 @@ void Board::move_piece(Square from, Square to)
         throw std::invalid_argument("square " + std::to_string(from) +
                                     " is empty, there is no piece to move.");
 
-    bb_board[piece.color][piece.piece_type] &= square_bb(from);
+    bb_board[piece.color][piece.piece_type] &= ~square_bb(from);
     bb_board[piece.color][piece.piece_type] |= square_bb(to);
-}
-
-bool Board::is_capture(Square from, Square to)
-{
-    return false;
 }
 
 uint64_t Board::pseudo_legal_moves_on_square(Square square, std::function<bool(Square)> callback)
@@ -345,7 +430,7 @@ uint64_t Board::pseudo_legal_moves_on_square(Square square, std::function<bool(S
                                                    shift_square(shift_square(square, def::right, 2), def::down));
 
     uint64_t rook_dirs = def::bb_ranks[square_rank(square)] | def::bb_files[square_file(square)];
-    uint64_t bishop_dirs = diagonals_at(square);
+    uint64_t bishop_dirs = chess::diagonals_at(square);
 
     switch(piece)
     {
@@ -389,6 +474,28 @@ uint64_t Board::pseudo_legal_moves_on_square(Square square, std::function<bool(S
 bool Board::move_is_pseudo_legal(Square from, Square to)
 {
     return square_bb(to) & pseudo_legal_moves_on_square(from);
+}
+
+bool Board::is_attacking_square(Square from, Square to)
+{
+    if (move_is_pseudo_legal(from, to))
+    {
+        if (piece_type_at(from) == def::pawn)
+            if (square_file(from) != square_file(to))
+                return true;
+        return true;
+    }
+
+    return false;
+}
+
+bool Board::is_capture(Square from, Square to)
+{
+    if (is_attacking_square(from, to))
+        if (piece_type_at(to) != def::king)
+            return true;
+
+    return false;
 }
 
 std::pair<bool, def::error_code> Board::move_is_legal(Square from, Square to)
@@ -511,4 +618,74 @@ void Board::make_move(Square from, Square to)
     if (move_is_legal(from, to).first)
         move_piece(from, to);
 //    else throw something
+}
+
+std::string Board::board_fen()
+{
+    std::string board_fen;
+
+    constexpr int max_fen_length = 90;
+    board_fen.reserve(max_fen_length);
+
+    // iterate over each line
+
+    for (int rank_i = 0; rank_i < 8; rank_i++)
+    {
+        int empty_square_counter = 0;
+        for (Square square = 8*rank_i; square_rank(square) == rank_i; square = shift_square(square, def::right))
+        {
+            Piece piece = piece_at(square);
+
+            if (piece != Piece::empty_square())
+            {
+                if (empty_square_counter != 0)
+                {
+                    board_fen.push_back(empty_square_counter + '0');
+                    empty_square_counter = 0;
+                }
+
+                char symbol = def::piece_symbol(piece.piece_type);
+                if (piece.color == def::white)
+                    symbol = std::toupper(symbol);
+//                std::cout << "<<<" << piece.piece_type << ">>> ";
+                board_fen.push_back(symbol);
+            }
+            else empty_square_counter++;
+        }
+
+        if (empty_square_counter != 0)
+            board_fen.push_back(empty_square_counter + '0');
+
+        if (rank_i != 7)
+            board_fen.push_back('/');
+    }
+
+    return board_fen;
+}
+
+std::string Board::fen()
+{
+    std::string fen = board_fen();
+
+    return fen;
+}
+
+std::string Board::board()
+{
+    std::string board;
+    std::string b_fen = board_fen();
+
+    for (auto it = b_fen.rbegin(); it != b_fen.rend(); it++)
+    {
+        if (std::isalpha(*it))
+            board.push_back(*it);
+
+        if (std::isdigit(*it))
+            board.append(std::string(*it - '0', '.'));
+
+        if (*it == '/')
+            board.push_back('\n');
+    }
+
+    return board;
 }

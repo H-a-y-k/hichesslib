@@ -27,13 +27,13 @@ struct Piece
     static Piece empty_square();
     
     bool operator== (const Piece &other) const;
+    bool operator!= (const Piece &other) const;
 };
 
 namespace def
 {
 enum directions
 {
-    null = 0,
     up,
     down,
     right,
@@ -41,7 +41,8 @@ enum directions
     up_right,
     up_left,
     down_right,
-    down_left
+    down_left,
+    null
 };
 
 constexpr Color white = true;
@@ -52,17 +53,17 @@ constexpr std::array<int, 8> rank_names = {'1', '2', '3', '4', '5', '6', '7', '8
 
 enum piece_types: PieceType
 {
-    no_piece = -1,
     pawn,
     knight,
     bishop,
     rook,
     queen,
-    king
+    king,
+    no_piece
 };
 
-constexpr std::array<char, 6> piece_symbols = {'p', 'n', 'b', 'r', 'q', 'k'};
-constexpr std::array<const char*, 6> piece_names = {"pawn", "knight", "bishop", "rook", "queen", "knight"};
+constexpr std::array<char, 7> piece_symbols = {'p', 'n', 'b', 'r', 'q', 'k', '\0'};
+constexpr std::array<const char*, 7> piece_names = {"pawn", "knight", "bishop", "rook", "queen", "king", ""};
 
 char piece_symbol(PieceType t);
 const char* piece_name(PieceType t);
@@ -111,14 +112,14 @@ constexpr std::array<uint64_t, 8> bb_files =
 
 constexpr std::array<uint64_t, 8> bb_ranks =
 {
-    0xff,
-    0xffff,
-    0xffffff,
-    0xffffffff,
-    0xffffffffff,
-    0xffffffffffff,
-    0xffffffffffffff,
-    0xffffffffffffffff
+    0x00000000000000ff,
+    0x000000000000ff00,
+    0x0000000000ff0000,
+    0x00000000ff000000,
+    0x000000ff00000000,
+    0x0000ff0000000000,
+    0x00ff000000000000,
+    0xff00000000000000
 };
 
 enum error_code
@@ -136,6 +137,7 @@ enum error_code
 
 uint64_t square_bb(Square square);
 Square square_at(int rank, int file);
+uint64_t diagonals_at(Square square);
 Square shift_square(Square square, def::directions direction, int step = 1);
 int square_rank(Square square);
 int square_file(Square square);
@@ -149,27 +151,37 @@ struct Move
 
 class Board
 {
+public:
     std::array<std::array<uint64_t, 6>, 2> bb_board {};
     bool king_under_check = false;
+    std::string castling_rights = "KQkq";
 
-public:
-    Board(const std::string &fen = def::starting_board_fen);
+//public:
+    Board(const std::string &fen = def::starting_fen);
 
+    Board operator=(const Board&);
     void reset_board();
     void clear();
     void set_board_fen(const std::string &board_fen);
-    bool can_castle_kingside(Color side);
-    bool can_castle_queenside(Color side);
+    void set_fen(const std::string &fen);
     PieceType piece_type_at(Square square);
     Piece piece_at(Square square);
     Color color_at(Square square);
+    Square king(Color side);
+    bool can_castle_kingside(Color side);
+    bool can_castle_queenside(Color side);
     bool square_is_empty(Square square);
     void move_piece(Square from, Square to);
+    bool is_attacking_square(Square from, Square to);
     bool is_capture(Square from, Square to);
-    uint64_t pseudo_legal_moves_on_square(Square square, std::function<bool(Square)> = [](Square) { return true; });
+    uint64_t pseudo_legal_moves_on_square(Square square,
+                                          std::function<bool(Square)> = [](Square) { return true; });
     bool move_is_pseudo_legal(Square from, Square to);
     std::pair<bool, def::error_code> move_is_legal(Square from, Square to);
     void make_move(Square from, Square to);
+    std::string board_fen();
+    std::string fen();
+    std::string board();
 };
 
 // TODO
