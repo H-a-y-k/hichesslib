@@ -272,8 +272,6 @@ This is emitted when the game is over.
    cellWidgets(predicate: Callable[[CellWidget], bool] = _DefaultPredicate) -> Generator[CellWidget, None, None]
 ```
 
-Yields
-------
 Generator[CellWidget, None, None]
     All the cell widgets in the board's layout
     that fulfill the predicate's condition.
