@@ -127,10 +127,10 @@ enum error_code
     ok = 0,
     move_not_pseudo_legal,
     square_not_empty,
-    empty_capture,
     king_capture,
     king_passing_through_check,
-    cant_castle
+    cant_castle,
+    pawn_capturing_empty_square
 };
 
 } // namespace def

@@ -1,5 +1,6 @@
 #include "chessplusplus/chessplusplus.h"
 #include <iostream>
+#include <cassert>
 
 using namespace chess;
 
@@ -90,8 +91,6 @@ Square chess::square_at(int rank, int file)
 
 Square chess::shift_square(Square square, def::directions direction, int step)
 {
-    // avoid changing rank/file. in this way you can loop easier
-
     switch(direction)
     {
     case def::up:
@@ -99,9 +98,9 @@ Square chess::shift_square(Square square, def::directions direction, int step)
     case def::down:
         return square - step * 8;
     case def::right:
-        return square + step;
+        return square+step;
     case def::left:
-        return square - step;
+        return square-step;
     case def::up_right:
         return square + step + step * 8;
     case def::up_left:
@@ -118,29 +117,31 @@ Square chess::shift_square(Square square, def::directions direction, int step)
 
 int chess::square_rank(Square square)
 {
-    return square / 8;
+    return square % 8;
 }
 
 int chess::square_file(Square square)
 {
-    return square % 8;
+    return square / 8;
 }
 
 uint64_t chess::diagonals_at(Square square)
 {
     uint64_t result = 0;
 
-    for (Square i = square; pvt::is_valid_square(i); i = shift_square(square, def::up_left))
-        result |= i;
+    for (Square i = square; pvt::is_valid_square(i) && square_rank(i) != 0; i = shift_square(i, def::up_left))
+        result |= square_bb(i);
 
-    for (Square i = square; pvt::is_valid_square(i); i = shift_square(square, def::up_right))
-        result |= i;
+    for (Square i = square; pvt::is_valid_square(i) && square_rank(i) != 7 && square_file(i) != 7; i = shift_square(i, def::up_right))
+    {
+        result |= square_bb(i);
+    }
 
-    for (Square i = square; pvt::is_valid_square(i); i = shift_square(square, def::down_left))
-        result |= i;
+    for (Square i = square; pvt::is_valid_square(i) && square_rank(i) != 0; i = shift_square(i, def::down_left))
+        result |= square_bb(i);
 
-    for (Square i = square; pvt::is_valid_square(i); i = shift_square(square, def::down_right))
-        result |= i;
+    for (Square i = square; pvt::is_valid_square(i) && square_rank(i) != 7; i = shift_square(i, def::down_right))
+        result |= square_bb(i);
 
     return result;
 }
@@ -404,14 +405,18 @@ bool Board::square_is_empty(Square square)
 
 void Board::move_piece(Square from, Square to)
 {
-    Piece piece = piece_at(from);
+    Piece piece_from = piece_at(from);
+    Piece piece_to = piece_at(to);
 
-    if (piece == Piece::empty_square())
+    if (piece_from == Piece::empty_square())
         throw std::invalid_argument("square " + std::to_string(from) +
                                     " is empty, there is no piece to move.");
 
-    bb_board[piece.color][piece.piece_type] &= ~square_bb(from);
-    bb_board[piece.color][piece.piece_type] |= square_bb(to);
+    bb_board[piece_from.color][piece_from.piece_type] &= ~square_bb(from);
+    if (piece_to != Piece::empty_square())
+        bb_board[piece_to.color][piece_to.piece_type] &= ~square_bb(to);
+
+    bb_board[piece_from.color][piece_from.piece_type] |= square_bb(to);
 }
 
 uint64_t Board::pseudo_legal_moves_on_square(Square square, std::function<bool(Square)> callback)
@@ -492,7 +497,7 @@ bool Board::is_attacking_square(Square from, Square to)
 bool Board::is_capture(Square from, Square to)
 {
     if (is_attacking_square(from, to))
-        if (piece_type_at(to) != def::king)
+        if (piece_type_at(to) != def::no_piece && piece_type_at(to) != def::king)
             return true;
 
     return false;
@@ -522,14 +527,12 @@ std::pair<bool, def::error_code> Board::move_is_legal(Square from, Square to)
             if (square_file(to) - square_file(from) == 1)
                 return square_is_empty(to) ? _true : code(def::square_not_empty);
             else return square_is_empty(to) &&
-                        square_is_empty(shift_square(to, def::up)) ? _true : code(def::empty_capture);
+                        square_is_empty(shift_square(to, def::up)) ? _true : code(def::square_not_empty);
         }
         else if (is_capture(from, to))
-        {
-            if (piece_type_at(to) != def::king)
-                return _true;
-            return code(def::king_capture);
-        }
+            return _true;
+        else if (piece_type_at(to) == def::no_piece)
+            return code(def::pawn_capturing_empty_square);
     }
     case def::knight:
         return _true;
@@ -614,10 +617,21 @@ std::pair<bool, def::error_code> Board::move_is_legal(Square from, Square to)
 }
 
 void Board::make_move(Square from, Square to)
-{
-    if (move_is_legal(from, to).first)
+{   auto legal = move_is_legal(from, to);
+
+    if (legal.first)
         move_piece(from, to);
-//    else throw something
+    else switch(legal.second)
+    {
+    case def::ok:
+    case def::move_not_pseudo_legal: throw std::invalid_argument("Move is not pseudolegal: ");
+    case def::square_not_empty: throw std::invalid_argument("Destination square is not empty");
+    case def::king_capture: throw std::invalid_argument("Move captures a king");
+    case def::king_passing_through_check: throw std::invalid_argument("King passing throw check");
+    case def::cant_castle: throw std::invalid_argument("Can't castle");
+    case def::pawn_capturing_empty_square: throw std::invalid_argument("Pawn capturing empty square");
+    }
+
 }
 
 std::string Board::board_fen()
@@ -629,13 +643,13 @@ std::string Board::board_fen()
 
     // iterate over each line
 
-    for (int rank_i = 0; rank_i < 8; rank_i++)
+    for (int file_i = 0; file_i < 8; file_i++)
     {
         int empty_square_counter = 0;
-        for (Square square = 8*rank_i; square_rank(square) == rank_i; square = shift_square(square, def::right))
+        for (Square square = 8*file_i; square_file(square) == file_i; square = shift_square(square, def::right))
         {
+//            std::cout << square;
             Piece piece = piece_at(square);
-
             if (piece != Piece::empty_square())
             {
                 if (empty_square_counter != 0)
@@ -651,12 +665,14 @@ std::string Board::board_fen()
                 board_fen.push_back(symbol);
             }
             else empty_square_counter++;
+
+            if (square_rank(square) == 7) break;
         }
 
         if (empty_square_counter != 0)
             board_fen.push_back(empty_square_counter + '0');
 
-        if (rank_i != 7)
+        if (file_i != 7)
             board_fen.push_back('/');
     }
 
