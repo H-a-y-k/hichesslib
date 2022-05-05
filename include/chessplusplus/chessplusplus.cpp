@@ -1,6 +1,7 @@
 #include "chessplusplus/chessplusplus.h"
 #include <iostream>
 #include <cassert>
+#include <bitset>
 
 using namespace chess;
 
@@ -232,10 +233,10 @@ void Board::set_board_fen(const std::string &_board_fen)
         int empty_cells = 0;
         int occupied_cells = 0;
 
+        bool previous_was_digit = false;
+
         for (auto symbol_it = row_it->cbegin(); symbol_it != row_it->cend(); symbol_it++)
         {
-            bool previous_was_digit = false;
-
             if (isdigit(*symbol_it))
             {
                 empty_cells += *symbol_it - '0';
@@ -255,10 +256,13 @@ void Board::set_board_fen(const std::string &_board_fen)
                     int file = std::abs(std::distance(symbol_it, row_it->cbegin()));
 
                     if (previous_was_digit)
-                        file += *(symbol_it-1) - '0';
+                    {
+                        std::cout << rank << " " << (def::rank_names[rank])-'0' << std::endl;
+                        file += *(symbol_it-1) - '0' - 1;
+                     }
+                    Color color = !std::islower(*symbol_it);
+                    PieceType piece = static_cast<PieceType>(std::abs(std::distance(found, def::piece_symbols.cbegin())));
 
-                    Color color = std::islower(*symbol_it);
-                    PieceType piece = static_cast<PieceType>(found - def::piece_symbols.cbegin());
                     tmp_bb_board[color][piece] |= square_bb(square_at(rank, file));
 //                    std::cout << "(" << rank << ", " << file << ") ";
                     previous_was_digit = false;
@@ -670,7 +674,10 @@ std::string Board::board_fen()
         }
 
         if (empty_square_counter != 0)
+        {
             board_fen.push_back(empty_square_counter + '0');
+            empty_square_counter = 0;
+        }
 
         if (file_i != 7)
             board_fen.push_back('/');
@@ -704,4 +711,24 @@ std::string Board::board()
     }
 
     return board;
+}
+
+std::string Board::bitboard_str()
+{
+    std::string result;
+    uint64_t result64 = 0;
+
+    result.resize(80);
+
+    for (int i = 0; i < 6; i++)
+        result64 |= bb_board[def::white][i];
+    for (int i = 0; i < 6; i++)
+        result64 |= bb_board[def::black][i];
+
+    for (int i = 0; i < 64; i++)
+    {
+        result[63-i] = (result64 & (uint64_t(1) << i)) ? '1' : '0';
+    }
+
+    return result;
 }

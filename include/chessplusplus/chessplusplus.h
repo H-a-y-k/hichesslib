@@ -182,6 +182,7 @@ public:
     std::string board_fen();
     std::string fen();
     std::string board();
+    std::string bitboard_str();
 };
 
 // TODO
