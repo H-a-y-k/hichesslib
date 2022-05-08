@@ -135,12 +135,14 @@ enum error_code
 
 } // namespace def
 
+bool is_valid_square(Square square);
 uint64_t square_bb(Square square);
 Square square_at(int rank, int file);
 uint64_t diagonals_at(Square square);
 Square shift_square(Square square, def::directions direction, int step = 1);
 int square_rank(Square square);
 int square_file(Square square);
+int square_mirror(Square square);
 
 struct Move
 {
@@ -160,16 +162,26 @@ public:
     Board(const std::string &fen = def::starting_fen);
 
     Board operator=(const Board&);
+
     void reset_board();
     void clear();
     void set_board_fen(const std::string &board_fen);
     void set_fen(const std::string &fen);
+
+    std::string board_fen();
+    std::string fen();
+    std::string board();
+    std::string bitboard_str();
+    Board mirror();
+
     PieceType piece_type_at(Square square);
     Piece piece_at(Square square);
     Color color_at(Square square);
     Square king(Color side);
+
     bool can_castle_kingside(Color side);
     bool can_castle_queenside(Color side);
+
     bool square_is_empty(Square square);
     void move_piece(Square from, Square to);
     bool is_attacking_square(Square from, Square to);
@@ -179,10 +191,6 @@ public:
     bool move_is_pseudo_legal(Square from, Square to);
     std::pair<bool, def::error_code> move_is_legal(Square from, Square to);
     void make_move(Square from, Square to);
-    std::string board_fen();
-    std::string fen();
-    std::string board();
-    std::string bitboard_str();
 };
 
 // TODO
