@@ -1,57 +1,16 @@
-#include "chessplusplus/chessplusplus.h"
 #include <iostream>
 #include <cassert>
+#include <algorithm>
+#include <numeric>
+#include "chessplusplus/chessplusplus.h"
+#include "internal/chess_utils.h"
+#include "internal/fen_utils.h"
 
 using namespace chess;
 
-namespace
-{
-namespace pvt
-{
-uint64_t combine_squares_impl(Square val)
-{
-    return square_bb(val);
-}
-
-template <typename... Squares>
-uint64_t combine_squares(Squares... squares)
-{
-    uint64_t result = 0;
-
-    auto a = {(result |= combine_squares_impl(squares))...}; // throwaway object
-
-    return result;
-}
-
-uint64_t combine_squares_if_impl(const std::function<bool(Square)> &callback, Square val)
-{
-    uint64_t result = 0;
-
-    if (callback(val))
-        result |= square_bb(val);
-
-    return result;
-}
-
-template <typename... Squares>
-uint64_t combine_squares_if(const std::function<bool(Square)> &callback, Squares... squares)
-{
-    uint64_t result = 0;
-
-    auto _ = {(result |= combine_squares_if_impl(callback, squares))...}; // throwaway object
-    (void)_;
-
-    return result;
-}
-
-std::function<bool(Square)> conjunction(const std::function<bool(Square)> &f1, const std::function<bool(Square)> &f2)
-{
-    return [f1, f2](Square sq) { return f1(sq) && f2(sq); };
-}
-
-}
-}
-
+/******************************************************************************
+ * chess::Piece
+ ******************************************************************************/
 
 Piece::Piece(PieceType _piece_type, Color _color)
     : piece_type(_piece_type)
@@ -74,90 +33,9 @@ bool Piece::operator!=(const Piece &other) const
 }
 
 
-bool chess::is_valid_square(Square square)
-{
-    return 0 <= square && square <= 63;
-}
-
-uint64_t chess::square_bb(Square square)
-{
-    return uint64_t(1) << square;
-}
-
-Square chess::square_at(int rank, int file)
-{
-    return rank * 8 + file;
-}
-
-Square chess::shift_square(Square square, def::directions direction, int step)
-{
-    switch(direction)
-    {
-    case def::up:
-        return square + step * 8;
-    case def::down:
-        return square - step * 8;
-    case def::right:
-        return square+step;
-    case def::left:
-        return square-step;
-    case def::up_right:
-        return square + step + step * 8;
-    case def::up_left:
-        return square - step + step * 8;
-    case def::down_right:
-        return square + step - step * 8;
-    case def::down_left:
-        return square - step - step * 8;
-    case def::null: break;
-    }
-
-    return square;
-}
-
-int chess::square_rank(Square square)
-{
-    return square % 8;
-}
-
-int chess::square_file(Square square)
-{
-    return square / 8;
-}
-
-uint64_t chess::diagonals_at(Square square)
-{
-    uint64_t result = 0;
-
-    for (Square i = square; is_valid_square(i) && square_rank(i) != 0; i = shift_square(i, def::up_left))
-        result |= square_bb(i);
-
-    for (Square i = square; is_valid_square(i) && square_rank(i) != 7 && square_file(i) != 7; i = shift_square(i, def::up_right))
-    {
-        result |= square_bb(i);
-    }
-
-    for (Square i = square; is_valid_square(i) && square_rank(i) != 0; i = shift_square(i, def::down_left))
-        result |= square_bb(i);
-
-    for (Square i = square; is_valid_square(i) && square_rank(i) != 7; i = shift_square(i, def::down_right))
-        result |= square_bb(i);
-
-    return result;
-}
-
-// defaults
-
-char def::piece_symbol(PieceType type)
-{
-    return def::piece_symbols[type];
-}
-
-const char* def::piece_name(PieceType type)
-{
-    return def::piece_names[type];
-}
-
+/******************************************************************************
+ * chess::Move
+ ******************************************************************************/
 
 Move::Move(Square from, Square to)
     : from(from)
@@ -165,6 +43,9 @@ Move::Move(Square from, Square to)
 { }
 
 
+/******************************************************************************
+ * chess::Board
+ ******************************************************************************/
 Board::Board(const std::string &fen)
 {
     if (fen.empty())
@@ -202,82 +83,9 @@ void Board::clear()
 
 void Board::set_board_fen(const std::string &_board_fen)
 {
-    if (_board_fen.empty())
-        throw std::invalid_argument("fen is empty");
-
-    if (_board_fen.find(' ') != std::string::npos)
-        throw std::invalid_argument(std::string("expected position part, got multiple parts: ") + _board_fen);
-
-    std::istringstream split(_board_fen);
-    std::vector<std::string> rows;
-
-    for (std::string row; std::getline(split, row, '/'); rows.push_back(row)) { }
-
-    if (rows.empty())
-        throw std::invalid_argument("rows aren't separated with slashes('/') in the fen: " + _board_fen);
-    else if (rows.size() != 8)
-        throw std::invalid_argument("the fen has to contain 8 rows and not" + std::to_string(rows.size()) + ": " + _board_fen);
-
+    const auto crows = utility::validate_and_split_board_fen(_board_fen);
     clear();
-
-    std::array<std::array<uint64_t, 6>, 2> tmp_bb_board {{{0,0,0,0,0,0},{0,0,0,0,0,0}}};
-
-    const auto crows = rows;
-
-    for (auto row_it = crows.crbegin(); row_it != crows.crend(); row_it++)
-    {
-        if (row_it->empty())
-            throw std::invalid_argument("rows in fen cannot be empty: " + _board_fen);
-
-        int empty_cells = 0;
-        int occupied_cells = 0;
-
-        bool previous_was_digit = false;
-
-        for (auto symbol_it = row_it->cbegin(); symbol_it != row_it->cend(); symbol_it++)
-        {
-            if (isdigit(*symbol_it))
-            {
-                empty_cells += *symbol_it - '0';
-
-                if (previous_was_digit)
-                    throw std::invalid_argument("a row in the fen shouldn't contain two digits next to each other: " + _board_fen);
-
-                previous_was_digit = true;
-            }
-            else
-            {
-                auto found = std::find(def::piece_symbols.begin(), def::piece_symbols.end(),
-                                       std::tolower(*symbol_it));
-                if (found != def::piece_symbols.end())
-                {
-                    int rank = 8- std::abs(std::distance(row_it, rows.crbegin()));
-                    int file = std::abs(std::distance(symbol_it, row_it->cbegin()));
-
-                    if (previous_was_digit)
-                    {
-                        std::cout << rank << " " << (def::rank_names[rank])-'0' << std::endl;
-                        file += *(symbol_it-1) - '0' - 1;
-                     }
-                    Color color = std::isupper(*symbol_it);
-                    PieceType piece = static_cast<PieceType>(std::abs(std::distance(found, def::piece_symbols.cbegin())));
-
-                    tmp_bb_board[color][piece] |= square_bb(square_at(rank, file));
-//                    std::cout << "(" << rank << ", " << file << ") ";
-                    previous_was_digit = false;
-                    occupied_cells++;
-                }
-                else throw std::invalid_argument("invalid character(s)('" +
-                                                 std::string(1, *symbol_it) +
-                                                 "') in the fen: " + _board_fen);
-            }
-        }
-
-        if (empty_cells + occupied_cells != 8)
-            throw std::invalid_argument("a fen row has to occupy exactly 8 cells: " + _board_fen);
-    }
-
-    bb_board = tmp_bb_board;
+    bb_board = utility::parse_board_fen_from_rows(crows, _board_fen);
 }
 
 void Board::set_fen(const std::string &fen)
@@ -332,30 +140,23 @@ std::string Board::board_fen()
     for (int file_i = 7; file_i >= 0; file_i--)
     {
         int empty_square_counter = 0;
-        for (Square square = 8*file_i; square_file(square) == file_i; square = shift_square(square, def::right))
+        for (Square square = file_i<<3; square - (file_i<<3) < 8; square++)
         {
-//            std::cout << square;
             Piece piece = piece_at(square);
 
-            if (piece != Piece::empty_square())
+            if (piece == Piece::empty_square())
             {
-                if (empty_square_counter != 0)
-                {
-                    board_fen.push_back(empty_square_counter + '0');
-                    empty_square_counter = 0;
-                }
-
-                char symbol = def::piece_symbol(piece.piece_type);
-                if (piece.color == def::white)
-                    symbol = std::toupper(symbol);
-//                std::cout << "<<<" << piece.piece_type << ">>> ";
-                board_fen.push_back(symbol);
+                empty_square_counter++;
+                continue;
             }
-            else empty_square_counter++;
+            if (empty_square_counter != 0)
+            {
+                board_fen.push_back(empty_square_counter + '0');
+                empty_square_counter = 0;
+            }
 
-            if (square_rank(square) == 7) break;
+            board_fen.push_back(piece_symbol_from_piece(piece.piece_type, piece.color));
         }
-
         if (empty_square_counter != 0)
         {
             board_fen.push_back(empty_square_counter + '0');
@@ -393,7 +194,9 @@ std::string Board::board()
             if (std::isalpha(*symbol_it))
                 board.push_back(*symbol_it);
             else if (std::isdigit(*symbol_it))
+            {
                 board.append(std::string(*symbol_it - '0', '.'));
+            }
         }
         board.push_back('\n');
     }
@@ -402,36 +205,35 @@ std::string Board::board()
 
 std::string Board::bitboard_str()
 {
-    std::string result;
-    uint64_t result64 = 0;
+    uint64_t bb = 0;
 
-    for (int i = 0; i < 6; i++)
-        result64 |= bb_board[def::white][i];
-    for (int i = 0; i < 6; i++)
-        result64 |= bb_board[def::black][i];
+    // accumulate over the white pieces
+    bb = std::accumulate(bb_board[def::white].begin(), bb_board[def::white].end(), bb,
+                              [](uint64_t acc, auto piece_bb) { return acc | piece_bb; });
 
-    for (int i = 0; i < 8; i++)
-    {
-        for (int j = 7; j >= 0; j--)
-            result.insert(result.begin(), (result64 & (uint64_t(1) << square_at(i, j))) ? '1' : '0');
+    // accumulate over the black pieces
+    bb = std::accumulate(bb_board[def::white].begin(), bb_board[def::black].end(), bb,
+                         [](uint64_t acc, auto piece_bb) { return acc | piece_bb; });
 
-        result.insert(result.begin(), '\n');
-    }
-    return result;
+    return utility::bitboard_to_string(bb);
 }
 
 PieceType Board::piece_type_at(Square square)
 {
-    for (auto piece_bb = bb_board[def::white].begin(); piece_bb != bb_board[def::white].end(); piece_bb++)
-    {
-        if (*piece_bb & square_bb(square))
-            return std::abs(std::distance(piece_bb, bb_board[def::white].begin()));
-    }
-    for (auto piece_bb = bb_board[def::black].begin(); piece_bb != bb_board[def::black].end(); piece_bb++)
-    {
-        if (*piece_bb & square_bb(square))
-            return std::abs(std::distance(piece_bb, bb_board[def::black].begin()));
-    }
+    auto pred = [square](const auto piece_bb) {
+        return piece_bb & square_bb(square);
+    };
+
+    const auto white_begin = bb_board[def::white].begin();
+    const auto white_end = bb_board[def::white].end();
+    const auto black_begin = bb_board[def::black].begin();
+    const auto black_end = bb_board[def::black].end();
+
+    if (auto it = std::find_if(white_begin, white_end, pred); it != white_end)
+        return static_cast<PieceType>(std::distance(white_begin, it));
+
+    if (auto it = std::find_if(black_begin, black_end, pred); it != black_end)
+        return static_cast<PieceType>(std::distance(black_begin, it));
 
     return def::no_piece;
 }
@@ -525,9 +327,15 @@ void Board::move_piece(Square from, Square to)
 uint64_t Board::pseudo_legal_moves_on_square(Square square, std::function<bool(Square)> callback)
 {
     PieceType piece = piece_type_at(square);
-    std::function<bool(Square)> condition = pvt::conjunction(callback, is_valid_square);
 
-    uint64_t knight_dirs = pvt::combine_squares_if(condition,
+    if (piece == def::no_piece)
+        return 0;
+
+    Color piece_color = piece_at(square).color;
+
+    std::function<bool(Square)> condition = utility::conjunction(callback, is_valid_square);
+
+    uint64_t knight_dirs = utility::combine_squares_if(condition,
                                                    shift_square(shift_square(square, def::up, 2), def::left),
                                                    shift_square(shift_square(square, def::up, 2), def::right),
                                                    shift_square(shift_square(square, def::down, 2), def::left),
@@ -543,7 +351,7 @@ uint64_t Board::pseudo_legal_moves_on_square(Square square, std::function<bool(S
     switch(piece)
     {
     case def::pawn: {
-        uint64_t pawn_dirs = pvt::combine_squares_if(condition,
+        uint64_t pawn_dirs = utility::combine_squares_if(condition,
                                                      shift_square(square, def::up),
                                                      shift_square(square, def::up_left),
                                                      shift_square(square, def::up_right));
@@ -562,7 +370,7 @@ uint64_t Board::pseudo_legal_moves_on_square(Square square, std::function<bool(S
         return knight_dirs | bishop_dirs | rook_dirs;
     case def::king:
     {
-        uint64_t king_dirs = pvt::combine_squares_if(condition,
+        uint64_t king_dirs = utility::combine_squares_if(condition,
                                                      shift_square(square, def::up),
                                                      shift_square(square, def::down),
                                                      shift_square(square, def::left),
@@ -586,24 +394,28 @@ bool Board::move_is_pseudo_legal(Square from, Square to)
 
 bool Board::is_attacking_square(Square from, Square to)
 {
-    if (move_is_pseudo_legal(from, to))
-    {
-        if (piece_type_at(from) == def::pawn)
-            if (square_file(from) != square_file(to))
-                return true;
-        return true;
-    }
+    // TODO
 
-    return false;
+    // if (move_is_pseudo_legal(from, to))
+    // {
+    //     if (piece_type_at(from) == def::pawn)
+    //         if (square_file(from) != square_file(to))
+    //             return true;
+    //     return true;
+    // }
+
+    // return false;
 }
 
 bool Board::is_capture(Square from, Square to)
 {
-    if (is_attacking_square(from, to))
-        if (piece_type_at(to) != def::no_piece && piece_type_at(to) != def::king)
-            return true;
+    // TODO
 
-    return false;
+    // if (is_attacking_square(from, to))
+    //     if (piece_type_at(to) != def::no_piece && piece_type_at(to) != def::king)
+    //         return true;
+
+    // return false;
 }
 
 std::pair<bool, def::error_code> Board::move_is_legal(Square from, Square to)
@@ -743,7 +555,6 @@ void Board::make_move(Square from, Square to)
     case def::pawn_capturing_empty_square: throw std::invalid_argument("Pawn capturing empty square");
     case def::ok: break;
     }
-
 }
 
 
