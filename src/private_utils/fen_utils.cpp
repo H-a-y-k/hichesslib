@@ -1,5 +1,4 @@
 #include "internal/fen_utils.h"
-#include "internal/chess_utils.h"
 
 /******************************************************************************
  * fen utilities
@@ -7,7 +6,7 @@
 
 using namespace chess;
 
-std::vector<std::string> chess::utility::validate_and_split_board_fen(const std::string &_board_fen)
+std::vector<std::string> utility::validate_and_split_board_fen(const std::string &_board_fen)
 {
     if (_board_fen.empty())
         throw std::invalid_argument("fen is empty");
@@ -57,9 +56,9 @@ std::vector<std::string> chess::utility::validate_and_split_board_fen(const std:
     return rows;
 }
 
-std::array<std::array<uint64_t, 6>, 2> chess::utility::parse_board_fen_from_rows(std::vector<std::string> crows, const std::string &_board_fen)
+std::array<std::array<uint64_t, 7>, 2> utility::parse_board_fen_from_rows(std::vector<std::string> crows, const std::string &_board_fen)
 {
-    std::array<std::array<uint64_t, 6>, 2> tmp_bb_board {{{0,0,0,0,0,0},{0,0,0,0,0,0}}};
+    std::array<std::array<uint64_t, 7>, 2> tmp_bb_board {{{0,0,0,0,0,0,0},{0,0,0,0,0,0,0}}};
 
     for (auto row_it = crows.cbegin(); row_it != crows.cend(); row_it++)
     {
@@ -84,13 +83,13 @@ std::array<std::array<uint64_t, 6>, 2> chess::utility::parse_board_fen_from_rows
             Color color = std::isupper(*symbol_it);
             PieceType piece = piece_type_from_symbol(*symbol_it);
 
-            tmp_bb_board[color][piece] |= square_bb(square_at(rank, file));
+            tmp_bb_board[color][piece] |= def::bb_squares[square_at(rank, file)];
         }
     }
     return tmp_bb_board;
 }
 
-std::string chess::utility::bitboard_to_string(uint64_t bb)
+std::string utility::bitboard_to_string(uint64_t bb)
 {
     std::string strbb;
     for (int i = 0; i < 8; i++)

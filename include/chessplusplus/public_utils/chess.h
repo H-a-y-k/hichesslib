@@ -1,7 +1,7 @@
 #ifndef CONVENIENCE_H
 #define CONVENIENCE_H
 
-#include "def.h"
+#include "definitions.h"
 #include <cctype>
 #include <functional>
 #include <string>
@@ -12,6 +12,10 @@
 
 namespace chess
 {
+namespace square_utils
+{
+
+}
 [[nodiscard]]
 char piece_symbol(PieceType t);
 [[nodiscard]]
@@ -23,18 +27,27 @@ const char* piece_name(PieceType t);
 [[nodiscard]]
 bool is_valid_square(Square square);
 [[nodiscard]]
-uint64_t square_bb(Square square);
-[[nodiscard]]
 Square square_at(int rank, int file);
+[[nodiscard]] inline
+Bitboard shift_square(Square square, def::directions direction, int step = 1) {}
 [[nodiscard]]
-Square shift_square(Square square, def::directions direction, int step = 1);
+Bitboard shift_square_bb(Square square, def::directions direction, int step = 1);
+// [[nodiscard]]
+// Bitboard shift_square_bb(Bitboard bb, def::directions direction, int step = 1);
 [[nodiscard]]
 int square_rank(Square square);
 [[nodiscard]]
 int square_file(Square square);
 [[nodiscard]]
-int square_mirror(Square square);
+Bitboard rank_at(Square square);
 [[nodiscard]]
-uint64_t diagonals_at(Square square);
+Bitboard file_at(Square square);
+[[nodiscard]]
+Bitboard diagonal_at(Square square);
+[[nodiscard]]
+Bitboard antidiagonal_at(Square square);
+
+[[nodiscard]]
+int square_mirror(Square square);
 }
 #endif // CONVENIENCE_H

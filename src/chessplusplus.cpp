@@ -3,10 +3,12 @@
 #include <algorithm>
 #include <numeric>
 #include "chessplusplus/chessplusplus.h"
-#include "internal/chess_utils.h"
+#include "public_utils/chess.h"
 #include "internal/fen_utils.h"
+#include "internal/other_utils.h"
 
 using namespace chess;
+using namespace chess::def;
 
 /******************************************************************************
  * chess::Piece
@@ -61,25 +63,29 @@ void Board::reset_board()
     using namespace def;
 
     bb_board[white][pawn] = bb_ranks[1];
-    bb_board[white][knight] = square_bb(B1) | square_bb(G1);
-    bb_board[white][bishop] = square_bb(C1) | square_bb(F1);
-    bb_board[white][rook] = square_bb(A1) | square_bb(H1);
-    bb_board[white][queen] = square_bb(D1);
-    bb_board[white][def::king] = square_bb(E1);
+    bb_board[white][knight] = bb_squares[B1] | bb_squares[G1];
+    bb_board[white][bishop] = bb_squares[C1] | bb_squares[F1];
+    bb_board[white][rook] = bb_squares[A1] | bb_squares[H1];
+    bb_board[white][queen] = bb_squares[D1];
+    bb_board[white][def::king] = bb_squares[E1];
 
     bb_board[black][pawn] = bb_ranks[6];
-    bb_board[black][knight] = square_bb(B8) | square_bb(G8);
-    bb_board[black][bishop] = square_bb(C8) | square_bb(F8);
-    bb_board[black][rook] = square_bb(A8) | square_bb(H8);
-    bb_board[black][queen] = square_bb(D8);
-    bb_board[black][def::king] = square_bb(E8);
+    bb_board[black][knight] = bb_squares[B8] | bb_squares[G8];
+    bb_board[black][bishop] = bb_squares[C8] | bb_squares[F8];
+    bb_board[black][rook] = bb_squares[A8] | bb_squares[H8];
+    bb_board[black][queen] = bb_squares[D8];
+    bb_board[black][def::king] = bb_squares[E8];
 }
 
 void Board::clear()
 {
-    bb_board[def::white] = {0,0,0,0,0,0};
-    bb_board[def::black] = {0,0,0,0,0,0};
+    bb_board[def::white] = {0,0,0,0,0,0,0};
+    bb_board[def::black] = {0,0,0,0,0,0,0};
 }
+
+// *************
+// fen related
+// *************
 
 void Board::set_board_fen(const std::string &_board_fen)
 {
@@ -100,11 +106,11 @@ void Board::set_fen(const std::string &fen)
     std::string rest;
 
     std::getline(split, position, ' ');
-    std::getline(split, turn, ' ');
+    std::getline(split, turn, ' '); // TODO
     std::getline(split, _castling_rights, ' ');
-    std::getline(split, en_passant, ' ');
-    std::getline(split, halfmove_clock, ' ');
-    std::getline(split, fullmove_num, ' ');
+    std::getline(split, en_passant, ' '); // TODO
+    std::getline(split, halfmove_clock, ' '); // TODO
+    std::getline(split, fullmove_num, ' '); // TODO
     std::getline(split, rest, ' ');
 
     if (!rest.empty())
@@ -158,10 +164,7 @@ std::string Board::board_fen()
             board_fen.push_back(piece_symbol_from_piece(piece.piece_type, piece.color));
         }
         if (empty_square_counter != 0)
-        {
             board_fen.push_back(empty_square_counter + '0');
-            empty_square_counter = 0;
-        }
 
         if (file_i != 0)
             board_fen.push_back('/');
@@ -172,56 +175,63 @@ std::string Board::board_fen()
 
 std::string Board::fen()
 {
+    // TODO
     std::string fen = board_fen();
 
     return fen;
 }
 
-std::string Board::board()
+// ************************************
+// string representation of the board
+// ************************************
+
+std::string Board::board_str()
 {
     std::string board;
     std::string b_fen = board_fen();
 
     std::istringstream split(b_fen);
-    std::vector<std::string> rows;
 
+    std::vector<std::string> rows;
     for (std::string row; std::getline(split, row, '/'); rows.push_back(row)) { }
 
-    for (auto row_it = rows.begin(); row_it != rows.end(); row_it++)
+    for (const auto &row : rows)
     {
-        for (auto symbol_it = row_it->begin(); symbol_it != row_it->end(); symbol_it++)
+        for (auto symbol : row)
         {
-            if (std::isalpha(*symbol_it))
-                board.push_back(*symbol_it);
-            else if (std::isdigit(*symbol_it))
-            {
-                board.append(std::string(*symbol_it - '0', '.'));
-            }
+            if (std::isalpha(symbol))
+                board += symbol;
+            else if (std::isdigit(symbol))
+                board.append(symbol - '0', '.');
         }
-        board.push_back('\n');
+        board += '\n';
     }
     return board;
 }
 
 std::string Board::bitboard_str()
 {
-    uint64_t bb = 0;
+    Bitboard bb = 0;
 
     // accumulate over the white pieces
     bb = std::accumulate(bb_board[def::white].begin(), bb_board[def::white].end(), bb,
-                              [](uint64_t acc, auto piece_bb) { return acc | piece_bb; });
+                              [](Bitboard acc, auto piece_bb) { return acc | piece_bb; });
 
     // accumulate over the black pieces
     bb = std::accumulate(bb_board[def::white].begin(), bb_board[def::black].end(), bb,
-                         [](uint64_t acc, auto piece_bb) { return acc | piece_bb; });
+                         [](Bitboard acc, auto piece_bb) { return acc | piece_bb; });
 
     return utility::bitboard_to_string(bb);
 }
 
+// ****************************
+// square related information
+// ****************************
+
 PieceType Board::piece_type_at(Square square)
 {
     auto pred = [square](const auto piece_bb) {
-        return piece_bb & square_bb(square);
+        return piece_bb & bb_squares[square];
     };
 
     const auto white_begin = bb_board[def::white].begin();
@@ -242,9 +252,9 @@ Piece Board::piece_at(Square square)
 {
     PieceType piece_type = piece_type_at(square);
 
-    if (bb_board[def::white][piece_type] & square_bb(square))
+    if (bb_board[def::white][piece_type] & bb_squares[square])
         return Piece(piece_type, def::white);
-    else if (bb_board[def::black][piece_type] & square_bb(square))
+    else if (bb_board[def::black][piece_type] & bb_squares[square])
         return Piece(piece_type, def::black);
 
     return Piece::empty_square();
@@ -252,18 +262,27 @@ Piece Board::piece_at(Square square)
 
 Color Board::color_at(Square square)
 {
-    return bb_board[def::white][piece_type_at(square)] & square_bb(square);
+    return bb_board[def::white][piece_type_at(square)] & bb_squares[square];
+}
+
+bool Board::square_is_empty(Square square)
+{
+    return (piece_type_at(square) == def::no_piece);
 }
 
 Square Board::king(Color side)
 {
-    uint64_t bb_king = bb_board[side][def::king];
+    Bitboard bb_king = bb_board[side][def::king];
     Square square_i = 0;
     for (; bb_king != 1; bb_king >>= 2)
         square_i++;
 
     return square_i;
 }
+
+// *************
+// castling
+// *************
 
 bool Board::can_castle_kingside(Color side)
 {
@@ -303,11 +322,6 @@ bool Board::can_castle_queenside(Color side)
     return false;
 }
 
-bool Board::square_is_empty(Square square)
-{
-    return (piece_type_at(square) == def::no_piece);
-}
-
 void Board::move_piece(Square from, Square to)
 {
     Piece piece_from = piece_at(from);
@@ -317,79 +331,22 @@ void Board::move_piece(Square from, Square to)
         throw std::invalid_argument("square " + std::to_string(from) +
                                     " is empty, there is no piece to move.");
 
-    bb_board[piece_from.color][piece_from.piece_type] &= ~square_bb(from);
+    bb_board[piece_from.color][piece_from.piece_type] &= ~bb_squares[from];
     if (piece_to != Piece::empty_square())
-        bb_board[piece_to.color][piece_to.piece_type] &= ~square_bb(to);
+        bb_board[piece_to.color][piece_to.piece_type] &= ~bb_squares[to];
 
-    bb_board[piece_from.color][piece_from.piece_type] |= square_bb(to);
+    bb_board[piece_from.color][piece_from.piece_type] |= bb_squares[to];
 }
 
-uint64_t Board::pseudo_legal_moves_on_square(Square square, std::function<bool(Square)> callback)
+Bitboard Board::pseudo_legal_moves_on_square(Square square, std::function<bool(Square)> callback)
 {
-    PieceType piece = piece_type_at(square);
-
-    if (piece == def::no_piece)
-        return 0;
-
-    Color piece_color = piece_at(square).color;
-
-    std::function<bool(Square)> condition = utility::conjunction(callback, is_valid_square);
-
-    uint64_t knight_dirs = utility::combine_squares_if(condition,
-                                                   shift_square(shift_square(square, def::up, 2), def::left),
-                                                   shift_square(shift_square(square, def::up, 2), def::right),
-                                                   shift_square(shift_square(square, def::down, 2), def::left),
-                                                   shift_square(shift_square(square, def::down, 2), def::right),
-                                                   shift_square(shift_square(square, def::left, 2), def::up),
-                                                   shift_square(shift_square(square, def::left, 2), def::down),
-                                                   shift_square(shift_square(square, def::right, 2), def::up),
-                                                   shift_square(shift_square(square, def::right, 2), def::down));
-
-    uint64_t rook_dirs = def::bb_ranks[square_rank(square)] | def::bb_files[square_file(square)];
-    uint64_t bishop_dirs = chess::diagonals_at(square);
-
-    switch(piece)
-    {
-    case def::pawn: {
-        uint64_t pawn_dirs = utility::combine_squares_if(condition,
-                                                     shift_square(square, def::up),
-                                                     shift_square(square, def::up_left),
-                                                     shift_square(square, def::up_right));
-
-        if (square_rank(square) == 1 && square_rank(square) == 7)
-            return pawn_dirs | square_bb(shift_square(square, def::up, 2));
-        return pawn_dirs;
-    }
-    case def::knight:
-        return knight_dirs;
-    case def::bishop:
-        return bishop_dirs;
-    case def::rook:
-        return rook_dirs;
-    case def::queen:
-        return knight_dirs | bishop_dirs | rook_dirs;
-    case def::king:
-    {
-        uint64_t king_dirs = utility::combine_squares_if(condition,
-                                                     shift_square(square, def::up),
-                                                     shift_square(square, def::down),
-                                                     shift_square(square, def::left),
-                                                     shift_square(square, def::right));
-        if (can_castle_kingside(color_at(square)))
-            king_dirs |= shift_square(square, def::right, 2);
-        if (can_castle_queenside(color_at(square)))
-            king_dirs |= shift_square(square, def::left, 2);
-
-        return king_dirs;
-    }
-    }
-
-    return 0;
+    Piece piece = piece_at(square);
+    return def::bb_pseudolegal_moves[piece.color][piece.piece_type][square];
 }
 
 bool Board::move_is_pseudo_legal(Square from, Square to)
 {
-    return square_bb(to) & pseudo_legal_moves_on_square(from);
+    return bb_squares[to] & pseudo_legal_moves_on_square(from);
 }
 
 bool Board::is_attacking_square(Square from, Square to)

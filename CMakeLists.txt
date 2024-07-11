@@ -20,9 +20,3 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-# add_subdirectory(include/chessplusplus)
-# add_subdirectory(test)
-
-# # Now simply link against gtest or gtest_main as needed. Eg
-# add_executable(test/test.cpp)
-# target_link_libraries(chessplusplus gtest_main)
