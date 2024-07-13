@@ -1,4 +1,8 @@
 /CMakeFiles/
 CMakeCache.txt
+*.user
 *.user*
+include/chessplusplus/CMakeFiles/
+*.a
+
 
