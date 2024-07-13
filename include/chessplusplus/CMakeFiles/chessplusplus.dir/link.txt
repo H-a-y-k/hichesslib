@@ -1,0 +1,2 @@
+/usr/bin/ar qc libchessplusplus.a CMakeFiles/chessplusplus.dir/chessplusplus.cpp.o
+/usr/bin/ranlib libchessplusplus.a

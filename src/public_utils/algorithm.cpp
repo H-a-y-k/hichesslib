@@ -1,6 +1,6 @@
-#include "public_utils/chess.h"
-#include "internal/other_utils.h"
-#include "chessplusplus.h"
+#include "public_utils/algorithm.h"
+#include <cctype>
+#include <algorithm>
 
 /******************************************************************************
  * chess utilities

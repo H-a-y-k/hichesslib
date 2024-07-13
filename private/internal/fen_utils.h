@@ -1,7 +1,9 @@
 #ifndef UTILITY_H
 #define UTILITY_H
 
-#include "public_utils/chess.h"
+#include <string>
+#include <vector>
+#include "public_utils/definitions.h"
 
 namespace utility
 {

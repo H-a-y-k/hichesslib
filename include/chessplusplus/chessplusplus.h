@@ -12,7 +12,8 @@
 #include <utility>
 #include <cstdint>
 #include "public_utils/definitions.h"
-#include "public_utils/chess.h"
+#include "public_utils/precomputed.h"
+#include "public_utils/algorithm.h"
 
 namespace chess
 {

@@ -1,4 +1,5 @@
 #include "internal/fen_utils.h"
+#include "public_utils/algorithm.h"
 
 /******************************************************************************
  * fen utilities

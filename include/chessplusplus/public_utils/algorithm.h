@@ -12,10 +12,6 @@
 
 namespace chess
 {
-namespace square_utils
-{
-
-}
 [[nodiscard]]
 char piece_symbol(PieceType t);
 [[nodiscard]]

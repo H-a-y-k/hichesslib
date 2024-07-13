@@ -1,10 +1,10 @@
 add_library(chessplusplus
     ../../src/chessplusplus.cpp
-    ../../src/public_utils/chess.cpp
+    ../../src/public_utils/algorithm.cpp
     ../../src/private_utils/fen_utils.cpp
     chessplusplus.h
     public_utils/definitions.h
-    public_utils/chess.h
+    public_utils/algorithm.h
     ../../private/internal/fen_utils.h
     ../../private/internal/other_utils.h
 )
