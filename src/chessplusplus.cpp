@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <numeric>
 #include "chessplusplus/chessplusplus.h"
-#include "public_utils/chess.h"
 #include "internal/fen_utils.h"
 #include "internal/other_utils.h"
 
@@ -61,6 +60,7 @@ Board::Board(const std::string &fen)
 void Board::reset_board()
 {
     using namespace def;
+    using namespace precomputed;
 
     bb_board[white][pawn] = bb_ranks[1];
     bb_board[white][knight] = bb_squares[B1] | bb_squares[G1];
@@ -231,7 +231,7 @@ std::string Board::bitboard_str()
 PieceType Board::piece_type_at(Square square)
 {
     auto pred = [square](const auto piece_bb) {
-        return piece_bb & bb_squares[square];
+        return piece_bb & precomputed::bb_squares[square];
     };
 
     const auto white_begin = bb_board[def::white].begin();
@@ -252,9 +252,9 @@ Piece Board::piece_at(Square square)
 {
     PieceType piece_type = piece_type_at(square);
 
-    if (bb_board[def::white][piece_type] & bb_squares[square])
+    if (bb_board[def::white][piece_type] & precomputed::bb_squares[square])
         return Piece(piece_type, def::white);
-    else if (bb_board[def::black][piece_type] & bb_squares[square])
+    else if (bb_board[def::black][piece_type] & precomputed::bb_squares[square])
         return Piece(piece_type, def::black);
 
     return Piece::empty_square();
@@ -262,7 +262,7 @@ Piece Board::piece_at(Square square)
 
 Color Board::color_at(Square square)
 {
-    return bb_board[def::white][piece_type_at(square)] & bb_squares[square];
+    return bb_board[def::white][piece_type_at(square)] & precomputed::bb_squares[square];
 }
 
 bool Board::square_is_empty(Square square)
@@ -331,22 +331,22 @@ void Board::move_piece(Square from, Square to)
         throw std::invalid_argument("square " + std::to_string(from) +
                                     " is empty, there is no piece to move.");
 
-    bb_board[piece_from.color][piece_from.piece_type] &= ~bb_squares[from];
+    bb_board[piece_from.color][piece_from.piece_type] &= ~precomputed::bb_squares[from];
     if (piece_to != Piece::empty_square())
-        bb_board[piece_to.color][piece_to.piece_type] &= ~bb_squares[to];
+        bb_board[piece_to.color][piece_to.piece_type] &= ~precomputed::bb_squares[to];
 
-    bb_board[piece_from.color][piece_from.piece_type] |= bb_squares[to];
+    bb_board[piece_from.color][piece_from.piece_type] |= precomputed::bb_squares[to];
 }
 
 Bitboard Board::pseudo_legal_moves_on_square(Square square, std::function<bool(Square)> callback)
 {
     Piece piece = piece_at(square);
-    return def::bb_pseudolegal_moves[piece.color][piece.piece_type][square];
+    return precomputed::bb_pseudolegal_moves[piece.color][piece.piece_type][square];
 }
 
 bool Board::move_is_pseudo_legal(Square from, Square to)
 {
-    return bb_squares[to] & pseudo_legal_moves_on_square(from);
+    return precomputed::bb_squares[to] & pseudo_legal_moves_on_square(from);
 }
 
 bool Board::is_attacking_square(Square from, Square to)
@@ -384,106 +384,6 @@ std::pair<bool, def::error_code> Board::move_is_legal(Square from, Square to)
     if (!move_is_pseudo_legal(from, to))
         return code(def::move_not_pseudo_legal);
 
-    if (king_under_check)
-    {
-        Board tmp = *this;
-        tmp.move_piece(from, to);
-        if (tmp.king_under_check)
-            return code(def::king_passing_through_check);
-    }
-    else switch(piece_type_at(from))
-    {
-    case def::pawn: {
-        if (square_rank(from) == square_rank(to))
-        {
-            if (square_file(to) - square_file(from) == 1)
-                return square_is_empty(to) ? _true : code(def::square_not_empty);
-            else return square_is_empty(to) &&
-                        square_is_empty(shift_square(to, def::up)) ? _true : code(def::square_not_empty);
-        }
-        else if (is_capture(from, to))
-            return _true;
-        else if (piece_type_at(to) == def::no_piece)
-            return code(def::pawn_capturing_empty_square);
-    }
-    case def::knight:
-        return _true;
-    case def::bishop: {
-        def::directions x = def::null, y = def::null;
-
-        x = (square_file(to) - square_file(from) > 0) ? def::right
-                                                      : def::left;
-        y = (square_rank(to) - square_rank(from) > 0) ? def::up
-                                                      : def::down;
-
-        def::directions dir = static_cast<def::directions>(4 + (x-2) + y);
-
-        for (Square i = shift_square(from, dir); i != to; i = shift_square(i, dir))
-        {
-            if (!square_is_empty(i))
-                return code(def::square_not_empty);
-        }
-
-        return _true;
-    }
-    case def::rook: {
-        def::directions dir = def::null;
-
-        if (square_file(to) - square_file(from) > 0)
-            dir = def::right;
-        else if (square_file(to) - square_file(from) < 0)
-            dir = def::left;
-        else if (square_rank(to) - square_rank(from) > 0)
-            dir = def::up;
-        else if (square_rank(to) - square_rank(from) < 0)
-            dir = def::down;
-
-        for (Square i = shift_square(from, dir); i != to; i = shift_square(i, dir))
-        {
-            if (!square_is_empty(i))
-                return code(def::square_not_empty);
-        }
-
-        return _true;
-    }
-    case def::queen: {
-        def::directions x = def::null, y = def::null;
-
-        x = (square_file(to) - square_file(from) >= 0) ? def::right
-                                                      : def::left;
-        y = (square_rank(to) - square_rank(from) >= 0) ? def::up
-                                                      : def::down;
-
-        def::directions dir = static_cast<def::directions>(4 + (x-2) + y);
-
-        for (Square i = shift_square(from, dir); i != to; i = shift_square(i, dir))
-        {
-            if (!square_is_empty(i))
-                return code(def::square_not_empty);
-        }
-
-        return _true;
-    }
-    case def::king: {
-        Board tmp = *this;
-        tmp.move_piece(from, to);
-
-        if (!tmp.king_under_check)
-        {
-            int diff_x = abs(square_file(to) - square_file(from));
-            int diff_y = abs(square_rank(to) - square_rank(from));
-
-            if (diff_x <= 1 && diff_y <= 1)
-                return _true;
-            else if (can_castle_kingside(color_at(from)) || can_castle_queenside(from))
-            {
-                return _true;
-            }
-            else return code(def::cant_castle);
-        }
-        else return code(def::king_passing_through_check);
-    }
-    }
 
     return _true;
 }

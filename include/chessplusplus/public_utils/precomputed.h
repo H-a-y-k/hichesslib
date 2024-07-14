@@ -85,8 +85,15 @@ constexpr std::array<Bitboard, 64> bb_squares =
     Bitboard(1) << H8
 };
 
+constexpr Bitboard bb_corners = bb_squares[A1] | bb_squares[A8] | bb_squares[H1] | bb_squares[H8];
+constexpr Bitboard bb_center = bb_squares[D4] | bb_squares[E4] | bb_squares[D5] | bb_squares[E5];
+
+constexpr Bitboard bb_light_squares = 0x55aa55aa55aa55aa;
+constexpr Bitboard bb_dark_squares = 0xaa55aa55aa55aa55;
+
 constexpr Bitboard bb_empty = 0x0;
 constexpr Bitboard bb_full = 0xffffffffffffffff;
+
 constexpr std::array<Bitboard, 8> bb_files =
 {
     0x101010101010101,
@@ -110,6 +117,8 @@ constexpr std::array<Bitboard, 8> bb_ranks =
     0x00ff000000000000,
     0xff00000000000000
 };
+
+constexpr Bitboard bb_backranks = bb_ranks[0] | bb_ranks[7];
 
 // diagonals with default 7+rank-file numbering
 constexpr std::array<Bitboard, 15> bb_diagonals =

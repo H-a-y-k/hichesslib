@@ -13,7 +13,9 @@
 #include <cstdint>
 #include "public_utils/definitions.h"
 #include "public_utils/precomputed.h"
-#include "public_utils/algorithm.h"
+#include "public_utils/bitboard_utils.h"
+#include "public_utils/piece_utils.h"
+#include "public_utils/square_utils.h"
 
 namespace chess
 {

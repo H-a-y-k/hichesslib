@@ -1,5 +1,9 @@
 #include "internal/fen_utils.h"
-#include "public_utils/algorithm.h"
+#include <stdexcept>
+#include <sstream>
+#include "public_utils/piece_utils.h"
+#include "public_utils/square_utils.h"
+#include "public_utils/precomputed.h"
 
 /******************************************************************************
  * fen utilities
@@ -77,14 +81,13 @@ std::array<std::array<uint64_t, 7>, 2> utility::parse_board_fen_from_rows(std::v
 
             if (previous_was_digit)
             {
-                std::cout << rank << " " << (def::rank_names[rank])-'0' << std::endl;
                 file += *(symbol_it-1) - '0' - 1;
                 previous_was_digit = false;
             }
             Color color = std::isupper(*symbol_it);
             PieceType piece = piece_type_from_symbol(*symbol_it);
 
-            tmp_bb_board[color][piece] |= def::bb_squares[square_at(rank, file)];
+            tmp_bb_board[color][piece] |= precomputed::bb_squares[square_at(rank, file)];
         }
     }
     return tmp_bb_board;

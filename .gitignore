@@ -4,5 +4,7 @@ CMakeCache.txt
 *.user*
 include/chessplusplus/CMakeFiles/
 *.a
+*.autosave
+
 
 

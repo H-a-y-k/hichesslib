@@ -1,10 +1,15 @@
 add_library(chessplusplus
     ../../src/chessplusplus.cpp
-    ../../src/public_utils/algorithm.cpp
+    ../../src/public_utils/bitboard_utils.cpp
+    ../../src/public_utils/square_utils.cpp
+    ../../src/public_utils/piece_utils.cpp
     ../../src/private_utils/fen_utils.cpp
     chessplusplus.h
     public_utils/definitions.h
-    public_utils/algorithm.h
+    public_utils/precomputed.h
+    public_utils/bitboard_utils.h
+    public_utils/piece_utils.h
+    public_utils/square_utils.h
     ../../private/internal/fen_utils.h
     ../../private/internal/other_utils.h
 )

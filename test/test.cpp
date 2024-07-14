@@ -35,7 +35,7 @@ int main()
     // {
     //     if (sq != def::A1 && square_bb(sq) & def::bb_files[0])
     //         std::cout << "\n";
-    std::cout << bitboard_to_string(def::bb_ranks[0] << 8) << "\n";
+    // std::cout << bitboard_to_string(def::bb_ranks[0] << 8) << "\n";
     // }
     // std::cout << bitboard_to_string(shift_square_bb(def::H2, def::down)) << "\n";
     // for (auto qd : def::bb_queen_dirs)
