@@ -10,7 +10,9 @@ Requires python version >= 3.6. For other dependencies see [requirements file](h
 
 ## Usage
 ### Installation
-> python3 -m pip install hichesslib
+> git clone https://github.com/H-a-y-k/hichesslib
+> cd hichesslib
+> python3 -m pip install -r --requirements.txt
 
 ### Initialization
 To start using the library you need to create a PySide2 application. The library's widgets can be used like any Qt widget.
