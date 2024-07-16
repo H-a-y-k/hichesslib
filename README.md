@@ -11,7 +11,9 @@ Requires python version >= 3.6. For other dependencies see [requirements file](h
 ## Usage
 ### Installation
 > git clone https://github.com/H-a-y-k/hichesslib
+> 
 > cd hichesslib
+> 
 > python3 -m pip install -r --requirements.txt
 
 ### Initialization
